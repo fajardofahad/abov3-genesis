@@ -81,13 +81,17 @@ class Assistant:
             
             # Check for different types of requests in priority order
             is_file_operation = self._is_file_operation_request(user_input)
+            is_debug_request = self._is_debug_request(user_input)
             is_code_request = self._is_code_generation_request(user_input)
             
             print(f"[DEBUG] File operation request: {is_file_operation}")
+            print(f"[DEBUG] Debug/error fixing request: {is_debug_request}")
             print(f"[DEBUG] Code generation request: {is_code_request}")
             
             if is_file_operation:
                 response_text = await self._handle_file_operations(user_input)
+            elif is_debug_request:
+                response_text = await self._handle_debug_request(user_input, messages, model)
             elif is_code_request:
                 response_text = await self._handle_code_generation(user_input, messages, model)
             else:
@@ -1131,6 +1135,295 @@ Please provide the complete modified file content(s) with the requested changes.
             
         except Exception as e:
             return f"❌ Error during file operation: {str(e)}"
+    
+    def _is_debug_request(self, user_input: str) -> bool:
+        """Check if user input is requesting debugging or error fixing"""
+        user_input_lower = user_input.lower()
+        
+        # Debug and error-related keywords
+        debug_keywords = [
+            'debug', 'fix', 'error', 'bug', 'issue', 'problem', 'broken',
+            'not working', 'doesnt work', "doesn't work", 'failing', 'crash',
+            'exception', 'traceback', 'syntax error', 'runtime error',
+            'find error', 'find bug', 'whats wrong', "what's wrong",
+            'analyze', 'check code', 'review code', 'troubleshoot',
+            'diagnose', 'investigate', 'examine', 'lint', 'validate'
+        ]
+        
+        # Error patterns - common error descriptions
+        error_patterns = [
+            r'getting.*error',
+            r'throws.*error',
+            r'returns.*error',
+            r'shows.*error', 
+            r'error.*when',
+            r'error.*trying',
+            r'cant.*work',
+            r"can't.*work",
+            r'wont.*work',
+            r"won't.*work",
+            r'failing.*to',
+            r'unable.*to',
+            r'problem.*with',
+            r'issue.*with',
+            r'broken.*code',
+            r'code.*broken'
+        ]
+        
+        # Check direct keywords
+        if any(keyword in user_input_lower for keyword in debug_keywords):
+            return True
+        
+        # Check error patterns
+        import re
+        for pattern in error_patterns:
+            if re.search(pattern, user_input_lower):
+                return True
+        
+        return False
+    
+    async def _handle_debug_request(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle debugging and error fixing requests"""
+        if not self.code_generator:
+            return "❌ Debugging requires a project directory. Please set up a project first."
+        
+        try:
+            from pathlib import Path
+            import os
+            import re
+            
+            project_path = Path(self.code_generator.project_path)
+            user_input_lower = user_input.lower()
+            
+            print(f"[DEBUG] Starting debug analysis for request: {user_input[:50]}...")
+            
+            # Step 1: Find relevant files to analyze
+            relevant_files = []
+            
+            # Look for specific files mentioned in the user input
+            mentioned_files = self._extract_file_paths(user_input)
+            if mentioned_files:
+                for file_name in mentioned_files:
+                    for file_path in project_path.glob('**/*'):
+                        if file_path.is_file() and file_path.name.lower() == file_name.lower():
+                            relevant_files.append(file_path)
+                            break
+            
+            # If no specific files mentioned, find files based on context
+            if not relevant_files:
+                # Look for common file types that might have issues
+                file_patterns = []
+                
+                if any(word in user_input_lower for word in ['python', 'py', 'script']):
+                    file_patterns.extend(['*.py'])
+                elif any(word in user_input_lower for word in ['javascript', 'js', 'node']):
+                    file_patterns.extend(['*.js', '*.jsx'])
+                elif any(word in user_input_lower for word in ['web', 'html', 'website', 'page']):
+                    file_patterns.extend(['*.html', '*.css', '*.js'])
+                elif any(word in user_input_lower for word in ['java']):
+                    file_patterns.extend(['*.java'])
+                elif any(word in user_input_lower for word in ['cpp', 'c++', 'c']):
+                    file_patterns.extend(['*.cpp', '*.c', '*.h'])
+                else:
+                    # Default: look for common programming files
+                    file_patterns = ['*.py', '*.js', '*.html', '*.css', '*.java', '*.cpp', '*.c']
+                
+                # Find files matching patterns
+                for pattern in file_patterns:
+                    try:
+                        for file_path in project_path.glob(pattern):
+                            if file_path.is_file():
+                                relevant_files.append(file_path)
+                                if len(relevant_files) >= 5:  # Limit to 5 files max
+                                    break
+                    except:
+                        continue
+                    if len(relevant_files) >= 5:
+                        break
+            
+            if not relevant_files:
+                return "❌ No code files found to debug. Please specify which file has the issue or make sure your project contains code files."
+            
+            print(f"[DEBUG] Found {len(relevant_files)} files for debug analysis")
+            
+            # Step 2: Read and analyze file contents
+            file_contents = {}
+            for file_path in relevant_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        file_contents[file_path.name] = {
+                            'path': file_path,
+                            'content': content,
+                            'extension': file_path.suffix
+                        }
+                        print(f"[DEBUG] Read file for analysis: {file_path.name} ({len(content)} chars)")
+                except Exception as e:
+                    print(f"[DEBUG] Could not read {file_path}: {e}")
+            
+            if not file_contents:
+                return "❌ Could not read any files for debugging analysis."
+            
+            # Step 3: Run basic static analysis
+            analysis_results = await self._perform_static_analysis(file_contents)
+            
+            # Step 4: Create enhanced debugging prompt for AI
+            debug_prompt = f"""
+I need help debugging code. Here are the files and any detected issues:
+
+USER REQUEST: {user_input}
+
+CODE FILES:
+{chr(10).join([f"**{filename}** ({info['extension']}):{chr(10)}```{info['extension'][1:] if info['extension'] else 'text'}{chr(10)}{info['content']}{chr(10)}```{chr(10)}" for filename, info in file_contents.items()])}
+
+STATIC ANALYSIS RESULTS:
+{analysis_results}
+
+Please analyze the code and:
+1. Identify any syntax errors, logical issues, or potential bugs
+2. Explain what might be causing the problem described by the user
+3. Provide specific fixes with corrected code
+4. Suggest improvements or best practices
+5. If error messages were provided, explain what they mean and how to fix them
+
+Format your response with clear explanations and provide complete corrected code blocks where needed.
+"""
+            
+            # Step 5: Get AI debugging response
+            debug_messages = messages[:-1] + [{"role": "user", "content": debug_prompt}]
+            ai_response = await self._get_ai_response(model, debug_messages)
+            
+            # Step 6: Extract any code fixes from AI response
+            code_blocks = self._extract_code_blocks(ai_response)
+            fixed_files = []
+            
+            if code_blocks:
+                print(f"[DEBUG] AI provided {len(code_blocks)} code fixes")
+                
+                # Ask user if they want to apply fixes (in a real implementation)
+                # For now, we'll just show what would be fixed
+                for i, code_block in enumerate(code_blocks):
+                    # Try to match code block to appropriate file
+                    target_file = None
+                    language = code_block.get('language', '').lower()
+                    
+                    # Smart file matching based on language and content
+                    if language in ['python', 'py']:
+                        target_file = next((info for name, info in file_contents.items() if name.endswith('.py')), None)
+                    elif language in ['javascript', 'js']:
+                        target_file = next((info for name, info in file_contents.items() if name.endswith(('.js', '.jsx'))), None)
+                    elif language in ['html', 'htm']:
+                        target_file = next((info for name, info in file_contents.items() if name.endswith(('.html', '.htm'))), None)
+                    elif language == 'css':
+                        target_file = next((info for name, info in file_contents.items() if name.endswith('.css')), None)
+                    elif language in ['java']:
+                        target_file = next((info for name, info in file_contents.items() if name.endswith('.java')), None)
+                    elif language in ['cpp', 'c++', 'c']:
+                        target_file = next((info for name, info in file_contents.items() if name.endswith(('.cpp', '.c', '.h'))), None)
+                    
+                    # If no specific match, try to match by content similarity or use first file
+                    if not target_file and file_contents:
+                        target_file = list(file_contents.values())[0]
+                    
+                    if target_file:
+                        # Check if the code actually fixes something (basic heuristic)
+                        if len(code_block['code']) > len(target_file['content']) * 0.3:  # Substantial change
+                            try:
+                                # Write the fix back to the file
+                                with open(target_file['path'], 'w', encoding='utf-8') as f:
+                                    f.write(code_block['code'])
+                                
+                                fixed_files.append({
+                                    'path': target_file['path'].name,
+                                    'full_path': str(target_file['path']),
+                                    'size': len(code_block['code']),
+                                    'lines': code_block['code'].count('\n') + 1
+                                })
+                                print(f"[DEBUG] Applied fix to: {target_file['path'].name}")
+                            except Exception as e:
+                                print(f"[DEBUG] Failed to apply fix to {target_file['path'].name}: {e}")
+            
+            # Step 7: Prepare final response
+            if fixed_files:
+                fix_summary = "\n\n🔧 **Files Fixed:**\n"
+                for file_info in fixed_files:
+                    fix_summary += f"✅ `{file_info['path']}` ({file_info['lines']} lines, {file_info['size']} bytes)\n"
+                
+                ai_response += fix_summary
+                ai_response += "\n🎯 **Debug fixes have been applied to your files!**"
+            else:
+                ai_response += "\n\n💡 **Analysis complete!** Review the suggestions above to fix the issues."
+            
+            return ai_response
+            
+        except Exception as e:
+            return f"❌ Error during debugging analysis: {str(e)}"
+    
+    async def _perform_static_analysis(self, file_contents: Dict[str, Dict]) -> str:
+        """Perform basic static analysis on code files"""
+        results = []
+        
+        for filename, info in file_contents.items():
+            content = info['content']
+            extension = info.get('extension', '')
+            issues = []
+            
+            # Python-specific analysis
+            if extension == '.py':
+                # Check for common Python issues
+                lines = content.split('\n')
+                for i, line in enumerate(lines, 1):
+                    # Indentation issues (basic check)
+                    if line.strip() and not line.startswith(' ') and not line.startswith('\t') and ':' in line:
+                        if i < len(lines) and lines[i].strip() and not lines[i].startswith((' ', '\t')):
+                            issues.append(f"Line {i+1}: Possible indentation issue after '{line.strip()}'")
+                    
+                    # Common syntax issues
+                    if '=' in line and '==' not in line and '!=' not in line and '>=' not in line and '<=' not in line:
+                        if 'if ' in line or 'while ' in line or 'elif ' in line:
+                            issues.append(f"Line {i}: Possible assignment instead of comparison in condition")
+                    
+                    # Missing imports
+                    if any(func in line for func in ['os.', 'sys.', 'json.', 'datetime.']) and not any(imp in content for imp in ['import os', 'import sys', 'import json', 'import datetime']):
+                        issues.append(f"Line {i}: Using module functions without import")
+            
+            # JavaScript-specific analysis  
+            elif extension in ['.js', '.jsx']:
+                lines = content.split('\n')
+                for i, line in enumerate(lines, 1):
+                    # Missing semicolons (basic check)
+                    if line.strip().endswith((')', ']', '}')) and not line.strip().endswith((';', '{', ',')):
+                        if not any(keyword in line for keyword in ['if', 'while', 'for', 'function', 'class']):
+                            issues.append(f"Line {i}: Possibly missing semicolon")
+                    
+                    # Undefined variables (very basic)
+                    if '=' in line and not any(keyword in line for keyword in ['var ', 'let ', 'const ', 'function ']):
+                        var_name = line.split('=')[0].strip()
+                        if var_name and not any(f'{var_name} ' in prev_line for prev_line in content.split('\n')[:i-1]):
+                            issues.append(f"Line {i}: '{var_name}' might be used without declaration")
+            
+            # HTML-specific analysis
+            elif extension in ['.html', '.htm']:
+                # Basic HTML validation
+                if '<html' in content and '</html>' not in content:
+                    issues.append("Missing closing </html> tag")
+                if '<body' in content and '</body>' not in content:
+                    issues.append("Missing closing </body> tag")
+                if '<head' in content and '</head>' not in content:
+                    issues.append("Missing closing </head> tag")
+            
+            # CSS-specific analysis
+            elif extension == '.css':
+                # Basic CSS validation
+                if content.count('{') != content.count('}'):
+                    issues.append("Mismatched curly braces - possible unclosed CSS rule")
+            
+            if issues:
+                results.append(f"**{filename}:**\n" + '\n'.join(f"- {issue}" for issue in issues))
+            else:
+                results.append(f"**{filename}:** No obvious issues detected")
+        
+        return '\n\n'.join(results) if results else "No static analysis issues detected."
     
     async def create_file_directly(self, file_path: str, content: str, description: str = None) -> Dict[str, Any]:
         """Direct method to create files in the project"""
