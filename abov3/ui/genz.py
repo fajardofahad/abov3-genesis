@@ -472,6 +472,111 @@ class AnimatedStatus:
             
         finally:
             self.is_animating = False
+
+    async def start_background_animation(self, category: str, message: Optional[str] = None) -> None:
+        """
+        Start a continuous background animation that runs until stopped
+        """
+        if not message:
+            message = self.genz.get_status(category)
+        
+        frames = self._get_animation_frames(category)
+        self.is_animating = True
+        
+        if self.console:
+            from rich.live import Live
+            from rich.text import Text
+            
+            # Store the live instance for continuous updates
+            self.background_live = Live(console=self.console, refresh_per_second=8, transient=True)
+            self.background_live.start()
+            
+            try:
+                while self.is_animating:
+                    # Get current frame and effect
+                    frame_data = frames[self.frame_index % len(frames)]
+                    
+                    # Create animated text with Rich styling
+                    animated_text = Text()
+                    if isinstance(frame_data, tuple):
+                        frame_icon, effect_type = frame_data
+                        # Map effects to Rich styles
+                        style_map = {
+                            "bright": "bold bright_white",
+                            "dim": "dim white", 
+                            "flash": "bold bright_yellow",
+                            "sparkle": "bold bright_magenta",
+                            "impact": "bold bright_red",
+                            "creative": "bold bright_cyan",
+                            "experiment": "bold bright_green",
+                            "celebrate": "bold bright_blue",
+                            "intense": "bold red",
+                            "brilliant": "bold bright_yellow",
+                            "royal": "bold bright_magenta",
+                            "launch": "bold bright_green",
+                            "twinkle": "bold white"
+                        }
+                        style = style_map.get(effect_type, "bold white")
+                        animated_text.append(frame_icon, style=style)
+                        animated_text.append(f" {message}")
+                    else:
+                        animated_text.append(f"{frame_data} {message}")
+                    
+                    # Update the live display
+                    self.background_live.update(animated_text)
+                    
+                    # Update frame and wait
+                    self.frame_index = (self.frame_index + 1) % len(frames)
+                    
+                    # Variable animation speed
+                    if isinstance(frame_data, tuple):
+                        _, effect_type = frame_data
+                        speed_map = {
+                            "flash": 0.15,
+                            "sparkle": 0.2,
+                            "impact": 0.25,
+                            "bright": 0.3,
+                            "dim": 0.4,
+                            "twinkle": 0.2
+                        }
+                        await asyncio.sleep(speed_map.get(effect_type, 0.3))
+                    else:
+                        await asyncio.sleep(0.3)
+            except Exception:
+                pass  # Ignore animation errors
+        else:
+            # Fallback for non-Rich console
+            try:
+                while self.is_animating:
+                    frame_data = frames[self.frame_index % len(frames)]
+                    frame_icon = frame_data[0] if isinstance(frame_data, tuple) else frame_data
+                    print(f"\r{frame_icon} {message}", end="", flush=True)
+                    self.frame_index = (self.frame_index + 1) % len(frames)
+                    await asyncio.sleep(0.3)
+            except Exception:
+                pass
+
+    def stop_background_animation(self, final_message: Optional[str] = None) -> None:
+        """
+        Stop the background animation and show final message
+        """
+        self.is_animating = False
+        
+        if hasattr(self, 'background_live'):
+            try:
+                self.background_live.stop()
+                delattr(self, 'background_live')
+            except:
+                pass
+        
+        if final_message and self.console:
+            from rich.text import Text
+            final_text = Text()
+            final_text.append("🎯", style="bold")
+            final_text.append(f" {final_message}")
+            self.console.print(final_text)
+        elif final_message:
+            print(f"\r🎯 {final_message}")
     
     async def animate_thinking(self, duration: float = 2.0, message: Optional[str] = None) -> str:
         """Animate a thinking status"""

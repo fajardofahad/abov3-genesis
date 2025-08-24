@@ -1136,8 +1136,10 @@ class ABOV3Genesis:
         self.current_task = "Processing your request"
         
         try:
-            # Show animated thinking status
-            await self.animated_status.animate_thinking(duration=1.5)
+            # Start background animation that runs continuously
+            animation_task = asyncio.create_task(
+                self.animated_status.start_background_animation("thinking")
+            )
             
             # Prepare context for Assistant processing
             context = {
@@ -1151,11 +1153,32 @@ class ABOV3Genesis:
             # Process with assistant
             response = await self.assistant.process(user_input, context)
             
+            # Stop the background animation
+            self.animated_status.stop_background_animation("Processing complete!")
+            
+            # Cancel the animation task
+            animation_task.cancel()
+            try:
+                await animation_task
+            except asyncio.CancelledError:
+                pass
+            
             # Display response
             console.print(f"\n[bold green]Genesis Response:[/bold green]")
             console.print(response)
             
         except Exception as e:
+            # Stop animation on error
+            self.animated_status.stop_background_animation("Error occurred")
+            
+            # Cancel the animation task
+            if 'animation_task' in locals():
+                animation_task.cancel()
+                try:
+                    await animation_task
+                except asyncio.CancelledError:
+                    pass
+            
             console.print(f"[red]Error processing request: {e}[/red]")
         finally:
             self.processing = False
