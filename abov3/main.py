@@ -814,8 +814,8 @@ class ABOV3Genesis:
     
     async def genesis_design_phase(self, idea: str):
         """Genesis Design Phase - Create architecture from idea"""
-        console.print(f"{self.genz.get_status('building')}")
-        console.print("[cyan]📐 Entering Design Phase...[/cyan]\n")
+        await self.animated_status.animate_building(duration=2.0, message="📐 Entering Design Phase...")
+        console.print()
         
         # Switch to architect agent if available
         if self.agent_manager and self.agent_manager.has_agent('genesis-architect'):
@@ -847,8 +847,8 @@ class ABOV3Genesis:
     
     async def genesis_build_phase(self):
         """Genesis Build Phase - Create actual code"""
-        console.print(f"{self.genz.get_status('building')}")
-        console.print("[cyan]🔨 Entering Build Phase...[/cyan]\n")
+        await self.animated_status.animate_building(duration=2.5, message="🔨 Entering Build Phase...")
+        console.print()
         
         # Switch to builder agent if available
         if self.agent_manager and self.agent_manager.has_agent('genesis-builder'):
@@ -887,8 +887,8 @@ class ABOV3Genesis:
         if self.genesis_flow:
             await self.genesis_flow.update_phase('deploy', 'complete')
         
-        console.print(f"\n{self.genz.get_status('success')}")
-        console.print("[green]✅ Genesis Complete! Your idea is now reality![/green]")
+        await self.animated_status.show_completion_celebration("✅ Genesis Complete! Your idea is now reality!")
+        console.print("[green]✨ From idea to built reality - mission accomplished! ✨[/green]")
     
     def get_toolbar(self):
         """Get bottom toolbar with Genesis theme"""
@@ -1136,7 +1136,8 @@ class ABOV3Genesis:
         self.current_task = "Processing your request"
         
         try:
-            console.print(f"\n{self.genz.get_status('thinking')}")
+            # Show animated thinking status
+            await self.animated_status.animate_thinking(duration=1.5)
             
             # Prepare context for Assistant processing
             context = {
@@ -1275,8 +1276,8 @@ class ABOV3Genesis:
     
     async def cleanup(self):
         """Cleanup with Genesis theme"""
-        console.print(f"\n{self.genz.get_status('working')}")
-        console.print("[yellow]Preserving your genesis...[/yellow]")
+        await self.animated_status.animate_status("working", duration=1.0, message="Preserving your genesis...")
+        console.print()
         
         # Cancel background tasks
         for task in self.background_tasks:
@@ -1303,8 +1304,7 @@ class ABOV3Genesis:
             except:
                 pass
         
-        console.print(f"\n{self.genz.get_status('success')}")
-        console.print("[green]✨ Your genesis continues... See you next time! ✨[/green]")
+        await self.animated_status.animate_success(duration=2.0, message="✨ Your genesis continues... See you next time! ✨")
         console.print(f"[dim italic]{self.tagline}[/dim italic]")
 
 
