@@ -40,7 +40,7 @@ from abov3.session.manager import SessionManager
 from abov3.permissions.manager import PermissionManager
 from abov3.dependencies.detector import DependencyDetector
 from abov3.ui.display import UIManager
-from abov3.ui.genz import GenZStatus
+from abov3.ui.genz import GenZStatus, AnimatedStatus
 
 console = Console()
 
@@ -57,6 +57,7 @@ class ABOV3Genesis:
         self.project_manager = None
         self.registry = ProjectRegistry()
         self.genz = GenZStatus()
+        self.animated_status = AnimatedStatus(console)
         self.ui = UIManager()
         self.genesis_engine = None
         
@@ -256,7 +257,8 @@ class ABOV3Genesis:
             project_path.mkdir(parents=True, exist_ok=True)
             self.project_path = project_path
             
-            console.print(f"\n{self.genz.get_status('building')}")
+            # Show animated building status
+            await self.animated_status.animate_building(2.0, "Creating your Genesis workspace...")
             
             # Create .abov3 directory structure
             abov3_dir = project_path / ".abov3"
@@ -315,7 +317,10 @@ class ABOV3Genesis:
                 'genesis': True
             })
             
-            console.print(f"\n{self.genz.get_status('success')}")
+            # Show animated project creation success
+            await self.animated_status.show_completion_celebration(
+                f"Genesis initiated for '{name}' - Your idea is now reality-bound!"
+            )
             console.print(f"[green]✓ Genesis initiated for '{name}'[/green]")
             console.print(f"[green]💡 Idea captured: {idea[:50]}{'...' if len(idea) > 50 else ''}[/green]")
             console.print(f"\n[yellow]Ready to transform your idea into reality![/yellow]")
@@ -383,10 +388,117 @@ class ABOV3Genesis:
             return '-'.join(name_words)
         return 'genesis-project'
     
+    async def select_ai_model(self):
+        """Select AI model from available Ollama models"""
+        from abov3.core.ollama_client import OllamaClient
+        
+        try:
+            # Initialize Ollama client
+            ollama = OllamaClient()
+            
+            # Check if Ollama is available
+            if not await ollama.is_available():
+                console.print("[yellow]⚠️  Ollama not detected. Using default model configuration.[/yellow]")
+                return
+            
+            # Get available models
+            models = await ollama.list_models()
+            
+            if not models:
+                console.print("[yellow]⚠️  No Ollama models found. Please pull a model first.[/yellow]")
+                console.print("[dim]Example: ollama pull llama3[/dim]")
+                return
+            
+            # Check if user wants to select a model
+            console.print(f"\n[cyan]🤖 Found {len(models)} AI models available[/cyan]")
+            
+            # Show current default
+            current_model = getattr(self.assistant, 'default_model', 'llama3:latest') if hasattr(self, 'assistant') else 'llama3:latest'
+            console.print(f"[dim]Current: {current_model}[/dim]")
+            
+            # Ask if they want to change
+            change_model = console.input("\n[yellow]Would you like to select a different model? [y/N]: [/yellow]")
+            
+            if change_model.lower() in ['y', 'yes']:
+                await self.show_model_selection(models)
+                
+            await ollama.close()
+            
+        except Exception as e:
+            console.print(f"[red]Error accessing Ollama models: {e}[/red]")
+    
+    async def show_model_selection(self, models):
+        """Display model selection interface"""
+        console.print("\n[bold]Available AI Models:[/bold]")
+        
+        # Create table of models
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Model", style="cyan")
+        table.add_column("Size", style="green")
+        table.add_column("Modified", style="dim")
+        
+        for i, model in enumerate(models, 1):
+            name = model.get('name', 'Unknown')
+            size = self.format_model_size(model.get('size', 0))
+            modified = self.format_modified_date(model.get('modified_at', ''))
+            table.add_row(str(i), name, size, modified)
+        
+        console.print(table)
+        
+        # Get user choice
+        try:
+            choice = console.input(f"\n[yellow]Select model (1-{len(models)}) or Enter to skip: [/yellow]")
+            
+            if choice.strip():
+                model_index = int(choice) - 1
+                if 0 <= model_index < len(models):
+                    selected_model = models[model_index]
+                    model_name = selected_model.get('name', '')
+                    
+                    # Update the model in agent manager
+                    if self.agent_manager and self.agent_manager.current_agent:
+                        old_model = self.agent_manager.current_agent.model
+                        self.agent_manager.current_agent.model = model_name
+                        await self.agent_manager.save_agent(self.agent_manager.current_agent)
+                        
+                        console.print(f"[green]✅ Model changed from {old_model} to {model_name}[/green]")
+                    
+                    # Store preference
+                    self.selected_model = model_name
+                else:
+                    console.print("[red]Invalid selection[/red]")
+                    
+        except ValueError:
+            console.print("[red]Invalid input[/red]")
+    
+    def format_model_size(self, size_bytes):
+        """Format model size in human readable format"""
+        if size_bytes == 0:
+            return "Unknown"
+        
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} PB"
+    
+    def format_modified_date(self, date_str):
+        """Format modification date"""
+        if not date_str:
+            return "Unknown"
+        
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return dt.strftime("%Y-%m-%d")
+        except:
+            return "Unknown"
+
     async def initialize_project(self):
         """Initialize project with Genesis capabilities"""
-        console.print(f"\n{self.genz.get_status('thinking')}")
-        console.print("[cyan]Initializing Genesis Engine...[/cyan]")
+        # Show animated thinking status
+        await self.animated_status.animate_thinking(2.0, "Initializing Genesis Engine...")
         
         # Ensure .abov3 directory exists
         abov3_dir = self.project_path / '.abov3'
@@ -411,8 +523,12 @@ class ABOV3Genesis:
         self.permission_manager = PermissionManager(self.project_path)
         self.dependency_detector = DependencyDetector(self.project_path)
         
-        # Load or create Genesis agents
+        # Load or create Genesis agents with animation
+        await self.animated_status.animate_building(1.5, "Loading Genesis agents...")
         await self.load_genesis_agents()
+        
+        # Select AI model
+        await self.select_ai_model()
         
         # Initialize assistant with Genesis capabilities
         self.assistant = Assistant(

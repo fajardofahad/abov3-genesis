@@ -4,7 +4,9 @@ Fun, engaging status messages that keep users entertained during processing
 """
 
 import random
-from typing import Dict, List
+import asyncio
+import time
+from typing import Dict, List, Optional, Callable
 from enum import Enum
 
 class StatusCategory(Enum):
@@ -300,3 +302,213 @@ class GenZStatus:
             category.value: len(messages) 
             for category, messages in self.status_messages.items()
         }
+
+class AnimatedStatus:
+    """
+    Animated status display for GenZ messages with fun animations
+    """
+    
+    def __init__(self, console=None):
+        self.console = console
+        self.genz = GenZStatus()
+        self.is_animating = False
+        self.current_task = None
+        
+        # Animation frames for different states
+        self.loading_frames = [
+            "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
+        ]
+        
+        self.thinking_frames = [
+            "🧠 ", "💭 ", "⚡ ", "✨ ", "💫 ", "🌟 "
+        ]
+        
+        self.building_frames = [
+            "🏗️ ", "⚙️ ", "🔨 ", "🎨 ", "🧪 ", "⚡ "
+        ]
+        
+        self.success_frames = [
+            "✨", "🌟", "⭐", "💫", "🎉", "🔥", "💎", "👑"
+        ]
+        
+        self.frame_index = 0
+        
+    def _get_animation_frames(self, category: str) -> List[str]:
+        """Get animation frames for a category"""
+        if category == "thinking":
+            return self.thinking_frames
+        elif category == "building":
+            return self.building_frames  
+        elif category == "success":
+            return self.success_frames
+        else:
+            return self.loading_frames
+    
+    async def animate_status(
+        self, 
+        category: str, 
+        duration: float = 3.0,
+        message: Optional[str] = None,
+        callback: Optional[Callable] = None
+    ) -> str:
+        """
+        Display an animated status message
+        
+        Args:
+            category: Status category (thinking, building, etc.)
+            duration: How long to animate (seconds)
+            message: Custom message, if None will get random from category
+            callback: Optional function to call when animation completes
+        
+        Returns:
+            The final status message
+        """
+        if not message:
+            message = self.genz.get_status(category)
+        
+        frames = self._get_animation_frames(category)
+        start_time = time.time()
+        self.is_animating = True
+        
+        try:
+            while time.time() - start_time < duration and self.is_animating:
+                # Get current frame
+                frame = frames[self.frame_index % len(frames)]
+                
+                # Display animated message
+                if self.console:
+                    # Clear current line and display animated status
+                    self.console.print(f"\r{frame} {message}", end="")
+                else:
+                    print(f"\r{frame} {message}", end="", flush=True)
+                
+                # Update frame and wait
+                self.frame_index = (self.frame_index + 1) % len(frames)
+                await asyncio.sleep(0.3)  # Animation speed
+            
+            # Final static display
+            icon = self.genz.get_category_icon(category)
+            final_message = f"{icon} {message}"
+            
+            if self.console:
+                self.console.print(f"\r{final_message}")
+            else:
+                print(f"\r{final_message}")
+            
+            # Call callback if provided
+            if callback:
+                await callback()
+                
+            return final_message
+            
+        finally:
+            self.is_animating = False
+    
+    async def animate_thinking(self, duration: float = 2.0, message: Optional[str] = None) -> str:
+        """Animate a thinking status"""
+        return await self.animate_status("thinking", duration, message)
+    
+    async def animate_building(self, duration: float = 3.0, message: Optional[str] = None) -> str:
+        """Animate a building status"""
+        return await self.animate_status("building", duration, message)
+    
+    async def animate_success(self, duration: float = 2.0, message: Optional[str] = None) -> str:
+        """Animate a success status"""
+        return await self.animate_status("success", duration, message)
+    
+    async def animate_phase_transition(self, from_phase: str, to_phase: str, duration: float = 2.5) -> str:
+        """Animate a phase transition with special effects"""
+        message = self.genz.get_phase_transition_message(from_phase, to_phase)
+        
+        # Special transition animation
+        transition_frames = ["⚡", "✨", "🌟", "💫", "🚀"]
+        start_time = time.time()
+        
+        while time.time() - start_time < duration:
+            frame = transition_frames[self.frame_index % len(transition_frames)]
+            
+            if self.console:
+                self.console.print(f"\r{frame} {message}", end="")
+            else:
+                print(f"\r{frame} {message}", end="", flush=True)
+                
+            self.frame_index = (self.frame_index + 1) % len(transition_frames)
+            await asyncio.sleep(0.2)
+        
+        # Final display
+        final_message = f"🎯 {message}"
+        if self.console:
+            self.console.print(f"\r{final_message}")
+        else:
+            print(f"\r{final_message}")
+            
+        return final_message
+    
+    async def animate_progress(
+        self, 
+        steps: List[str], 
+        category: str = "working",
+        step_duration: float = 1.5
+    ) -> List[str]:
+        """
+        Animate through multiple progress steps
+        
+        Args:
+            steps: List of step descriptions
+            category: Animation category
+            step_duration: Duration for each step
+            
+        Returns:
+            List of final messages for each step
+        """
+        results = []
+        frames = self._get_animation_frames(category)
+        
+        for i, step in enumerate(steps):
+            if self.console:
+                self.console.print(f"\n[{i+1}/{len(steps)}] Starting: {step}")
+            else:
+                print(f"\n[{i+1}/{len(steps)}] Starting: {step}")
+            
+            # Animate this step
+            result = await self.animate_status(category, step_duration, step)
+            results.append(result)
+            
+            # Brief pause between steps
+            await asyncio.sleep(0.5)
+        
+        return results
+    
+    def stop_animation(self):
+        """Stop current animation"""
+        self.is_animating = False
+    
+    async def show_completion_celebration(self, success_message: Optional[str] = None) -> str:
+        """Show a celebration animation for completion"""
+        if not success_message:
+            success_message = self.genz.get_success_status()
+        
+        celebration_frames = [
+            "🎉", "✨", "🔥", "💎", "👑", "🌟", "⭐", "💫", 
+            "🚀", "🎯", "💅", "👾", "🎪", "🎨", "⚡"
+        ]
+        
+        # Celebration sequence
+        for _ in range(20):  # 20 frames of celebration
+            frame = random.choice(celebration_frames)
+            
+            if self.console:
+                self.console.print(f"\r{frame} {success_message}", end="")
+            else:
+                print(f"\r{frame} {success_message}", end="", flush=True)
+                
+            await asyncio.sleep(0.15)
+        
+        # Final success display
+        final_message = f"🎉 {success_message}"
+        if self.console:
+            self.console.print(f"\r{final_message}")
+        else:
+            print(f"\r{final_message}")
+            
+        return final_message
