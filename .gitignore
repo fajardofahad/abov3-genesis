@@ -47,3 +47,7 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Development/Testing files (keep local only)
+test_*.py
+*_test.py
