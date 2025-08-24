@@ -61,6 +61,10 @@ class ABOV3Genesis:
         self.ui = UIManager()
         self.genesis_engine = None
         
+        # Configuration for persistent settings
+        self.config_file = Path.home() / '.abov3' / 'config.yaml'
+        self.current_model = self.load_saved_model()
+        
         # Will be initialized after project selection
         self.agent_manager = None
         self.task_manager = None
@@ -82,6 +86,45 @@ class ABOV3Genesis:
         # Initialize with project if provided
         if project_path:
             self.project_path = Path(project_path)
+    
+    def load_saved_model(self):
+        """Load the saved AI model from config file"""
+        try:
+            if self.config_file.exists():
+                import yaml
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f) or {}
+                return config.get('ai_model', 'llama3:latest')
+        except Exception:
+            pass  # Fall back to default if config can't be loaded
+        return 'llama3:latest'
+    
+    def save_model_config(self, model_name: str):
+        """Save the AI model selection to config file"""
+        try:
+            # Ensure config directory exists
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Load existing config or create new one
+            config = {}
+            if self.config_file.exists():
+                import yaml
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f) or {}
+            
+            # Update model setting
+            config['ai_model'] = model_name
+            self.current_model = model_name
+            
+            # Save config
+            import yaml
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                yaml.safe_dump(config, f, default_flow_style=False)
+                
+            console.print(f"[green]✅ Saved {model_name} as default AI model[/green]")
+            
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Could not save model config: {e}[/yellow]")
     
     async def initialize(self):
         """Initialize ABOV3 Genesis with project selection"""
@@ -188,6 +231,9 @@ class ABOV3Genesis:
         
         # Display the banner directly without Panel wrapper to avoid double borders
         console.print(Text(banner_text, style="cyan", justify="center"))
+        
+        # Show current AI model
+        console.print(f"[dim]🤖 AI Model: [cyan]{self.current_model}[/cyan][/dim]")
         
         # Random Genesis motivation
         motivations = [
@@ -410,8 +456,7 @@ class ABOV3Genesis:
             console.print(f"\n[cyan]🤖 Found {len(models)} AI models available[/cyan]")
             
             # Show current default
-            current_model = getattr(self.assistant, 'default_model', 'llama3:latest') if hasattr(self, 'assistant') else 'llama3:latest'
-            console.print(f"[dim]Current: {current_model}[/dim]")
+            console.print(f"[dim]Current: {self.current_model}[/dim]")
             
             # Ask if they want to change
             change_model = console.input("\n[yellow]Would you like to select a different model? [y/N]: [/yellow]")
@@ -461,8 +506,12 @@ class ABOV3Genesis:
                         
                         console.print(f"[green]✅ Model changed from {old_model} to {model_name}[/green]")
                     
-                    # Store preference
-                    self.selected_model = model_name
+                    # Save model preference to config file
+                    self.save_model_config(model_name)
+                    
+                    # Update assistant default model
+                    if hasattr(self, 'assistant') and self.assistant:
+                        self.assistant.default_model = model_name
                 else:
                     console.print("[red]Invalid selection[/red]")
                     
@@ -533,6 +582,10 @@ class ABOV3Genesis:
             project_context=self.project_manager.get_context() if self.project_manager else {},
             genesis_engine=self.genesis_engine
         )
+        
+        # Set the saved AI model as default
+        if self.assistant:
+            self.assistant.default_model = self.current_model
         
         # Enable automatic agent switching
         if self.assistant and self.agent_manager:
@@ -760,6 +813,9 @@ class ABOV3Genesis:
         else:
             console.print(f"\n[bold cyan]📁 Project: {self.project_path.name}[/bold cyan]")
             console.print(f"[dim]Path: {self.project_path}[/dim]\n")
+        
+        # Show current AI model at the end
+        console.print(f"[dim]🤖 AI Model: [cyan]{self.current_model}[/cyan][/dim]\n")
     
     def get_phase_icon(self, phase: str) -> str:
         """Get icon for Genesis phase"""
@@ -1013,8 +1069,7 @@ class ABOV3Genesis:
         """Handle AI model management commands"""
         if not args:
             # Show current model info
-            current_model = self.agent_manager.current_agent.model if self.agent_manager and self.agent_manager.current_agent else 'Unknown'
-            console.print(f"\n[cyan]🤖 Current AI Model:[/cyan] {current_model}")
+            console.print(f"\n[cyan]🤖 Current AI Model:[/cyan] {self.current_model}")
             console.print("[dim]Use '/model switch' to change models[/dim]")
             return
         
@@ -1054,8 +1109,7 @@ class ABOV3Genesis:
                 return
             
             # Show current model
-            current_model = self.agent_manager.current_agent.model if self.agent_manager and self.agent_manager.current_agent else 'Unknown'
-            console.print(f"\n[cyan]🤖 Current Model:[/cyan] {current_model}")
+            console.print(f"\n[cyan]🤖 Current Model:[/cyan] {self.current_model}")
             
             # Display model selection with animated interface
             await self.animated_status.animate_building(1.0, "Preparing model selection interface...")

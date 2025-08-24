@@ -26,7 +26,8 @@ class Assistant:
         # Conversation history
         self.conversation_history = []
         
-        # Default model if agent doesn't specify one
+        # Default model if agent doesn't specify one  
+        # This will be updated by the main app with the saved model
         self.default_model = "llama3:latest"
         
         # Initialize code generator if we have project context
