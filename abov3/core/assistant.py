@@ -536,12 +536,157 @@ I'm still here to help with manual guidance and project management!"""
                has_language_keyword
     
     async def _handle_code_generation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
-        """Handle code generation requests with file creation"""
+        """Handle code generation requests with file creation and modification"""
         if not self.code_generator:
             # Debug information
             project_path = self.project_context.get('project_path', 'Not set')
             return f"❌ Code generation is not available. Debug info - Project path: {project_path}, Code generator: {self.code_generator is not None}"
         
+        try:
+            # Check if this is a modification request for existing files
+            is_modification_request = any(word in user_input.lower() for word in [
+                'update', 'modify', 'change', 'edit', 'fix', 'make', 'set', 'color', 'style', 'add'
+            ])
+            
+            if is_modification_request:
+                return await self._handle_file_modification(user_input, messages, model)
+            else:
+                return await self._handle_new_file_creation(user_input, messages, model)
+                
+        except Exception as e:
+            return f"❌ Error during code generation: {str(e)}"
+    
+    async def _handle_file_modification(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle modification of existing files like Claude does"""
+        import os
+        from pathlib import Path
+        
+        try:
+            # Find existing files that match the context
+            project_path = Path(self.code_generator.project_path)
+            relevant_files = []
+            
+            # Look for different file types based on context
+            context_lower = user_input.lower()
+            if any(word in context_lower for word in ['website', 'web', 'html', 'page']):
+                # Look for HTML, CSS, JS files
+                file_patterns = ['*.html', '*.htm', '*.css', '*.js']
+            elif any(word in context_lower for word in ['script', 'python', 'py']):
+                file_patterns = ['*.py']
+            elif any(word in context_lower for word in ['style', 'css']):
+                file_patterns = ['*.css', '*.html', '*.htm']
+            else:
+                # General search for common web files
+                file_patterns = ['*.html', '*.htm', '*.css', '*.js', '*.py']
+            
+            # Find matching files
+            for pattern in file_patterns:
+                try:
+                    for file_path in project_path.glob(pattern):
+                        if file_path.is_file():
+                            relevant_files.append(file_path)
+                except:
+                    pass
+            
+            if not relevant_files:
+                print("[DEBUG] No existing files found for modification, creating new files")
+                return await self._handle_new_file_creation(user_input, messages, model)
+            
+            print(f"[DEBUG] Found {len(relevant_files)} files for potential modification")
+            
+            # Read existing files and create modification context
+            file_contents = {}
+            for file_path in relevant_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        file_contents[file_path.name] = {
+                            'path': file_path,
+                            'content': content
+                        }
+                        print(f"[DEBUG] Read existing file: {file_path.name} ({len(content)} chars)")
+                except Exception as e:
+                    print(f"[DEBUG] Could not read {file_path}: {e}")
+            
+            if not file_contents:
+                return await self._handle_new_file_creation(user_input, messages, model)
+            
+            # Create enhanced prompt for AI with existing file contents
+            modification_prompt = f"""
+I need to modify existing files in a project. Here are the current files and their contents:
+
+{chr(10).join([f"**{filename}:**{chr(10)}```{chr(10)}{info['content']}{chr(10)}```{chr(10)}" for filename, info in file_contents.items()])}
+
+User Request: {user_input}
+
+Please provide the complete modified file content(s) with the requested changes. Maintain the existing structure and only change what's necessary for the request. Format your response with clear code blocks showing the full updated file contents.
+"""
+            
+            # Get AI response for modifications
+            modification_messages = messages[:-1] + [{"role": "user", "content": modification_prompt}]
+            ai_response = await self._get_ai_response(model, modification_messages)
+            
+            # Extract code blocks from AI response
+            code_blocks = self._extract_code_blocks(ai_response)
+            
+            if not code_blocks:
+                return f"❌ AI couldn't generate modifications for the request: {user_input}"
+            
+            print(f"[DEBUG] AI generated {len(code_blocks)} modified code blocks")
+            
+            # Apply modifications to files
+            modified_files = []
+            for i, code_block in enumerate(code_blocks):
+                # Try to match code block to appropriate file
+                target_file = None
+                language = code_block.get('language', '').lower()
+                
+                # Smart file matching based on language and content
+                if language in ['html', 'htm'] or '<html' in code_block['code'].lower():
+                    target_file = next((info for name, info in file_contents.items() if name.endswith(('.html', '.htm'))), None)
+                elif language == 'css' or ('body' in code_block['code'] and '{' in code_block['code']):
+                    target_file = next((info for name, info in file_contents.items() if name.endswith('.css')), None)
+                elif language in ['javascript', 'js']:
+                    target_file = next((info for name, info in file_contents.items() if name.endswith('.js')), None)
+                elif language == 'python':
+                    target_file = next((info for name, info in file_contents.items() if name.endswith('.py')), None)
+                
+                # If no specific match, use the first file
+                if not target_file and file_contents:
+                    target_file = list(file_contents.values())[0]
+                
+                if target_file:
+                    # Write the modified content back to the file
+                    try:
+                        with open(target_file['path'], 'w', encoding='utf-8') as f:
+                            f.write(code_block['code'])
+                        
+                        modified_files.append({
+                            'path': target_file['path'].name,
+                            'full_path': str(target_file['path']),
+                            'size': len(code_block['code']),
+                            'lines': code_block['code'].count('\n') + 1
+                        })
+                        print(f"[DEBUG] Successfully modified: {target_file['path'].name}")
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to modify {target_file['path'].name}: {e}")
+            
+            # Prepare response
+            if modified_files:
+                file_summary = "\n\n📝 **Files Modified:**\n"
+                for file_info in modified_files:
+                    file_summary += f"✅ `{file_info['path']}` ({file_info['lines']} lines, {file_info['size']} bytes)\n"
+                
+                ai_response += file_summary
+                ai_response += "\n🎯 **Your files have been updated with the requested changes!**"
+            
+            return ai_response
+            
+        except Exception as e:
+            return f"❌ Error during file modification: {str(e)}"
+    
+    async def _handle_new_file_creation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle creation of new files"""
         try:
             # Get AI response for the code
             ai_response = await self._get_ai_response(model, messages)
@@ -553,8 +698,9 @@ I'm still here to help with manual guidance and project management!"""
             print(f"[DEBUG] Found {len(code_blocks)} code blocks")
             print(f"[DEBUG] Found {len(file_paths)} file paths")
             
-            # If we found code blocks, offer to create files
+            # Always create files if we have code blocks, even without explicit file paths
             if code_blocks:
+                print(f"[DEBUG] Processing {len(code_blocks)} code blocks for file creation")
                 created_files = []
                 
                 for i, code_block in enumerate(code_blocks):
@@ -701,56 +847,32 @@ I'm still here to help with manual guidance and project management!"""
                         base_filename = 'generated_file'
                         user_input_words = user_input.lower().split()
                         
-                        # Check if this is an update request (look for existing files)
-                        is_update_request = any(word in user_input.lower() for word in ['update', 'modify', 'change', 'edit'])
+                        # Look for common file name patterns for new files
+                        if 'hello' in user_input_words and 'world' in user_input_words:
+                            base_filename = 'hello_world'
+                        elif 'index' in user_input_words:
+                            base_filename = 'index'
+                        elif 'main' in user_input_words:
+                            base_filename = 'main'
+                        elif 'app' in user_input_words:
+                            base_filename = 'app'
+                        elif 'server' in user_input_words:
+                            base_filename = 'server'
+                        elif 'client' in user_input_words:
+                            base_filename = 'client'
+                        elif 'test' in user_input_words:
+                            base_filename = 'test'
+                        elif 'example' in user_input_words:
+                            base_filename = 'example'
                         
-                        if is_update_request:
-                            # Look for existing HTML files in the project
-                            import os
-                            project_files = []
-                            try:
-                                for root, dirs, files in os.walk(self.code_generator.project_path):
-                                    for file in files:
-                                        if file.endswith(('.html', '.htm')):
-                                            project_files.append(file)
-                            except:
-                                pass
-                            
-                            if project_files:
-                                # Use the first HTML file found for updates
-                                file_path = project_files[0]
-                                print(f"[DEBUG] Update request - using existing file: {file_path}")
-                            else:
-                                file_path = 'index.html'  # Create new if none exists
-                        else:
-                            # Look for common file name patterns for new files
-                            if 'hello' in user_input_words and 'world' in user_input_words:
-                                base_filename = 'hello_world'
-                            elif 'index' in user_input_words:
-                                base_filename = 'index'
-                            elif 'main' in user_input_words:
-                                base_filename = 'main'
-                            elif 'app' in user_input_words:
-                                base_filename = 'app'
-                            elif 'server' in user_input_words:
-                                base_filename = 'server'
-                            elif 'client' in user_input_words:
-                                base_filename = 'client'
-                            elif 'test' in user_input_words:
-                                base_filename = 'test'
-                            elif 'example' in user_input_words:
-                                base_filename = 'example'
-                            
-                            file_path = f"{base_filename}{extension}"
+                        file_path = f"{base_filename}{extension}"
                     
-                    # Create the file (allow overwrite for update requests)
-                    allow_overwrite = any(word in user_input.lower() for word in ['update', 'modify', 'change', 'edit'])
-                    
+                    # Create the new file
                     result = await self.code_generator.create_file(
                         file_path,
                         code_block['code'],
                         f"Generated from request: {user_input[:50]}...",
-                        overwrite=allow_overwrite
+                        overwrite=False  # New files only, no overwriting
                     )
                     
                     if result['success']:
