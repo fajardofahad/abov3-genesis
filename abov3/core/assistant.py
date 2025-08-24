@@ -452,6 +452,14 @@ I'm still here to help with manual guidance and project management!"""
             'implement', 'develop', 'program'
         ]
         
+        # Programming language names
+        language_keywords = [
+            'python', 'javascript', 'java', 'c++', 'cpp', 'c#', 'csharp', 'rust', 'go', 'golang',
+            'html', 'css', 'php', 'ruby', 'swift', 'kotlin', 'scala', 'typescript', 'dart',
+            'shell', 'bash', 'powershell', 'sql', 'r', 'julia', 'lua', 'perl', 'haskell',
+            'elixir', 'erlang', 'clojure', 'assembly', 'solidity', 'verilog', 'vhdl'
+        ]
+        
         # File-related keywords
         file_keywords = [
             'save to', 'write to', 'create file', 'generate file',
@@ -461,15 +469,70 @@ I'm still here to help with manual guidance and project management!"""
         # Check for combinations
         has_code_keyword = any(keyword in user_input_lower for keyword in code_generation_keywords)
         has_file_keyword = any(keyword in user_input_lower for keyword in file_keywords)
+        has_language_keyword = any(lang in user_input_lower for lang in language_keywords)
         
-        # Explicit file extensions
-        has_file_extension = any(ext in user_input_lower for ext in ['.py', '.js', '.html', '.css', '.java', '.cpp', '.c', '.rs', '.go'])
+        # Explicit file extensions - comprehensive list for all coding languages
+        coding_extensions = [
+            # Web Development
+            '.html', '.htm', '.css', '.scss', '.sass', '.less', '.js', '.jsx', '.ts', '.tsx', 
+            '.vue', '.svelte', '.php', '.asp', '.aspx', '.jsp',
+            
+            # Python
+            '.py', '.pyw', '.pyx', '.pyi', '.ipynb',
+            
+            # JavaScript/Node.js
+            '.mjs', '.cjs', '.json', '.jsonc',
+            
+            # Java/JVM
+            '.java', '.kt', '.scala', '.clj', '.groovy',
+            
+            # C/C++
+            '.c', '.cc', '.cpp', '.cxx', '.c++', '.h', '.hpp', '.hxx', '.h++',
+            
+            # C#/.NET
+            '.cs', '.vb', '.fs', '.fsx',
+            
+            # Systems Programming
+            '.rs', '.go', '.zig', '.d', '.nim',
+            
+            # Mobile Development
+            '.swift', '.m', '.mm', '.dart',
+            
+            # Scripting
+            '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+            
+            # Data/Config
+            '.sql', '.yaml', '.yml', '.toml', '.xml', '.ini', '.cfg', '.conf',
+            
+            # Other Popular Languages
+            '.rb', '.pl', '.pm', '.r', '.R', '.jl', '.lua', '.tcl',
+            '.hs', '.lhs', '.elm', '.ml', '.mli', '.ocaml',
+            '.erl', '.ex', '.exs', '.clj', '.cljs', '.cljc',
+            
+            # Assembly
+            '.asm', '.s', '.S',
+            
+            # Specialized
+            '.sol', '.v', '.sv', '.vhd', '.vhdl', '.tex', '.md', '.rst'
+        ]
+        
+        has_file_extension = any(ext in user_input_lower for ext in coding_extensions)
         
         has_make_phrase = any(phrase in user_input_lower for phrase in ['write a', 'create a', 'generate a', 'make a'])
         
-        print(f"[DEBUG] Code detection - has_code_keyword: {has_code_keyword}, has_file_keyword: {has_file_keyword}, has_file_extension: {has_file_extension}, has_make_phrase: {has_make_phrase}")
+        print(f"[DEBUG] Code detection - has_code_keyword: {has_code_keyword}, has_file_keyword: {has_file_keyword}, has_file_extension: {has_file_extension}, has_make_phrase: {has_make_phrase}, has_language_keyword: {has_language_keyword}")
         
-        return (has_code_keyword and has_file_keyword) or has_file_extension or has_make_phrase
+        # Enhanced detection logic - any of these patterns should trigger code generation:
+        # 1. Code keyword + file keyword (e.g., "write code to file")
+        # 2. Code keyword + language (e.g., "write python code")
+        # 3. File extension mentioned (e.g., "create .html file")
+        # 4. Make/create phrase (e.g., "make a script")
+        # 5. Language keyword alone (e.g., "python hello world")
+        return (has_code_keyword and has_file_keyword) or \
+               (has_code_keyword and has_language_keyword) or \
+               has_file_extension or \
+               has_make_phrase or \
+               has_language_keyword
     
     async def _handle_code_generation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
         """Handle code generation requests with file creation"""
@@ -495,21 +558,164 @@ I'm still here to help with manual guidance and project management!"""
                     if i < len(file_paths):
                         file_path = file_paths[i]
                     else:
-                        # Generate file path based on language
+                        # Generate file path based on language - comprehensive mapping
                         language = code_block.get('language', 'python')
                         extensions = {
-                            'python': '.py',
-                            'javascript': '.js', 
-                            'java': '.java',
-                            'cpp': '.cpp',
-                            'c': '.c',
-                            'rust': '.rs',
-                            'go': '.go',
+                            # Web Development
                             'html': '.html',
-                            'css': '.css'
+                            'htm': '.html',
+                            'css': '.css',
+                            'scss': '.scss',
+                            'sass': '.sass',
+                            'less': '.less',
+                            'javascript': '.js',
+                            'js': '.js',
+                            'jsx': '.jsx',
+                            'typescript': '.ts',
+                            'ts': '.ts',
+                            'tsx': '.tsx',
+                            'vue': '.vue',
+                            'svelte': '.svelte',
+                            'php': '.php',
+                            'asp': '.asp',
+                            'aspx': '.aspx',
+                            'jsp': '.jsp',
+                            
+                            # Python
+                            'python': '.py',
+                            'py': '.py',
+                            'pyx': '.pyx',
+                            'pyi': '.pyi',
+                            
+                            # Java/JVM Languages
+                            'java': '.java',
+                            'kotlin': '.kt',
+                            'kt': '.kt',
+                            'scala': '.scala',
+                            'clojure': '.clj',
+                            'clj': '.clj',
+                            'groovy': '.groovy',
+                            
+                            # C/C++
+                            'c': '.c',
+                            'cpp': '.cpp',
+                            'c++': '.cpp',
+                            'cxx': '.cxx',
+                            'cc': '.cc',
+                            'h': '.h',
+                            'hpp': '.hpp',
+                            'hxx': '.hxx',
+                            
+                            # C#/.NET
+                            'csharp': '.cs',
+                            'cs': '.cs',
+                            'c#': '.cs',
+                            'vb': '.vb',
+                            'vbnet': '.vb',
+                            'fsharp': '.fs',
+                            'fs': '.fs',
+                            
+                            # Systems Programming
+                            'rust': '.rs',
+                            'rs': '.rs',
+                            'go': '.go',
+                            'golang': '.go',
+                            'zig': '.zig',
+                            'd': '.d',
+                            'nim': '.nim',
+                            
+                            # Mobile Development
+                            'swift': '.swift',
+                            'objc': '.m',
+                            'objective-c': '.m',
+                            'dart': '.dart',
+                            
+                            # Scripting
+                            'bash': '.sh',
+                            'sh': '.sh',
+                            'shell': '.sh',
+                            'zsh': '.zsh',
+                            'fish': '.fish',
+                            'powershell': '.ps1',
+                            'ps1': '.ps1',
+                            'batch': '.bat',
+                            'bat': '.bat',
+                            'cmd': '.cmd',
+                            
+                            # Data/Config
+                            'sql': '.sql',
+                            'yaml': '.yaml',
+                            'yml': '.yml',
+                            'toml': '.toml',
+                            'xml': '.xml',
+                            'json': '.json',
+                            'ini': '.ini',
+                            'cfg': '.cfg',
+                            'conf': '.conf',
+                            
+                            # Other Popular Languages
+                            'ruby': '.rb',
+                            'rb': '.rb',
+                            'perl': '.pl',
+                            'pl': '.pl',
+                            'r': '.R',
+                            'julia': '.jl',
+                            'jl': '.jl',
+                            'lua': '.lua',
+                            'tcl': '.tcl',
+                            'haskell': '.hs',
+                            'hs': '.hs',
+                            'elm': '.elm',
+                            'ocaml': '.ml',
+                            'ml': '.ml',
+                            'erlang': '.erl',
+                            'erl': '.erl',
+                            'elixir': '.ex',
+                            'ex': '.ex',
+                            
+                            # Assembly
+                            'assembly': '.asm',
+                            'asm': '.asm',
+                            'nasm': '.asm',
+                            
+                            # Specialized
+                            'solidity': '.sol',
+                            'sol': '.sol',
+                            'verilog': '.v',
+                            'v': '.v',
+                            'vhdl': '.vhdl',
+                            'latex': '.tex',
+                            'tex': '.tex',
+                            'markdown': '.md',
+                            'md': '.md',
+                            'rst': '.rst',
+                            'restructuredtext': '.rst'
                         }
-                        extension = extensions.get(language, '.txt')
-                        file_path = f"generated_code_{i+1}{extension}"
+                        extension = extensions.get(language.lower(), '.txt')
+                        
+                        # Determine base filename from user request
+                        base_filename = 'generated_file'
+                        user_input_words = user_input.lower().split()
+                        
+                        # Look for common file name patterns
+                        if 'hello' in user_input_words and 'world' in user_input_words:
+                            base_filename = 'hello_world'
+                        elif 'index' in user_input_words:
+                            base_filename = 'index'
+                        elif 'main' in user_input_words:
+                            base_filename = 'main'
+                        elif 'app' in user_input_words:
+                            base_filename = 'app'
+                        elif 'server' in user_input_words:
+                            base_filename = 'server'
+                        elif 'client' in user_input_words:
+                            base_filename = 'client'
+                        elif 'test' in user_input_words:
+                            base_filename = 'test'
+                        elif 'example' in user_input_words:
+                            base_filename = 'example'
+                        
+                        file_path = f"{base_filename}{extension}"
                     
                     # Create the file
                     result = await self.code_generator.create_file(
