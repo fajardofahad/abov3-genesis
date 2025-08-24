@@ -175,15 +175,34 @@ class ABOV3Genesis:
     
     def show_genesis_banner(self):
         """Display the ABOV3 Genesis banner"""
-        banner_text = """
-╔══════════════════════════════════════════════════════╗
-║              ABOV3 Genesis v1.0.0                    ║
-║         From Idea to Built Reality                   ║
-║                                                       ║
-║    ✨ Transform your ideas into working code ✨      ║
-║       💡 Idea → 📐 Design → 🔨 Build → 🚀 Ship       ║
-╚══════════════════════════════════════════════════════╝
-        """
+        # Create banner with exact 54-character width for perfect alignment
+        banner_lines = [
+            "╔══════════════════════════════════════════════════════╗",
+            "║              ABOV3 Genesis v1.0.0                    ║",
+            "║          From Idea to Built Reality                  ║",
+            "║                                                       ║",
+            "║    ✨ Transform your ideas into working code ✨      ║",
+            "║       💡 Idea → 📐 Design → 🔨 Build → 🚀 Ship       ║",
+            "╚══════════════════════════════════════════════════════╝"
+        ]
+        
+        # Ensure each content line is exactly 53 characters (54 - 2 border chars)
+        def format_banner_line(content):
+            # Remove existing border chars if any
+            content = content.strip("║").strip()
+            # Pad to exactly 53 characters
+            return f"║{content:^53}║"
+        
+        # Rebuild banner with consistent formatting
+        banner_text = "\n" + "\n".join([
+            banner_lines[0],  # Top border
+            format_banner_line("ABOV3 Genesis v1.0.0"),
+            format_banner_line("From Idea to Built Reality"),
+            format_banner_line(""),
+            format_banner_line("✨ Transform your ideas into working code ✨"),
+            format_banner_line("💡 Idea → 📐 Design → 🔨 Build → 🚀 Ship"),
+            banner_lines[6]   # Bottom border
+        ]) + "\n"
         
         # Display the banner directly without Panel wrapper to avoid double borders
         console.print(Text(banner_text, style="cyan", justify="center"))
