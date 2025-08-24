@@ -9,6 +9,7 @@ from datetime import datetime
 import json
 
 from .ollama_client import OllamaClient
+from .code_generator import CodeGenerator
 
 class Assistant:
     """
@@ -27,6 +28,12 @@ class Assistant:
         
         # Default model if agent doesn't specify one
         self.default_model = "llama3:latest"
+        
+        # Initialize code generator if we have project context
+        self.code_generator = None
+        if project_context and 'project_path' in project_context:
+            from pathlib import Path
+            self.code_generator = CodeGenerator(Path(project_context['project_path']))
     
     async def process(self, user_input: str, context: Dict[str, Any] = None) -> str:
         """Process user input and return response"""
@@ -49,8 +56,12 @@ class Assistant:
             # Prepare messages for chat
             messages = self._prepare_messages(user_input, system_prompt)
             
-            # Get AI response
-            response_text = await self._get_ai_response(model, messages)
+            # Check if this is a code generation request
+            if self._is_code_generation_request(user_input):
+                response_text = await self._handle_code_generation(user_input, messages, model)
+            else:
+                # Get AI response
+                response_text = await self._get_ai_response(model, messages)
             
             # Add assistant response to history
             self.conversation_history.append({
@@ -404,3 +415,180 @@ I'm still here to help with manual guidance and project management!"""
         ])
         
         return suggestions[:5]  # Return top 5 suggestions
+    
+    def _is_code_generation_request(self, user_input: str) -> bool:
+        """Check if user input is requesting code generation"""
+        user_input_lower = user_input.lower()
+        
+        # Direct code generation keywords
+        code_generation_keywords = [
+            'write', 'create', 'generate', 'build', 'make',
+            'code', 'function', 'class', 'file', 'script',
+            'implement', 'develop', 'program'
+        ]
+        
+        # File-related keywords
+        file_keywords = [
+            'save to', 'write to', 'create file', 'generate file',
+            'put in', 'add to project', 'create in'
+        ]
+        
+        # Check for combinations
+        has_code_keyword = any(keyword in user_input_lower for keyword in code_generation_keywords)
+        has_file_keyword = any(keyword in user_input_lower for keyword in file_keywords)
+        
+        # Explicit file extensions
+        has_file_extension = any(ext in user_input_lower for ext in ['.py', '.js', '.html', '.css', '.java', '.cpp', '.c', '.rs', '.go'])
+        
+        return (has_code_keyword and has_file_keyword) or has_file_extension or \
+               any(phrase in user_input_lower for phrase in ['write a', 'create a', 'generate a', 'make a'])
+    
+    async def _handle_code_generation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle code generation requests with file creation"""
+        if not self.code_generator:
+            return "❌ Code generation is not available. Please ensure you're working within a project directory."
+        
+        try:
+            # Get AI response for the code
+            ai_response = await self._get_ai_response(model, messages)
+            
+            # Try to extract code blocks and file paths from the response
+            code_blocks = self._extract_code_blocks(ai_response)
+            file_paths = self._extract_file_paths(user_input)
+            
+            # If we found code blocks, offer to create files
+            if code_blocks:
+                created_files = []
+                
+                for i, code_block in enumerate(code_blocks):
+                    # Determine file path
+                    if i < len(file_paths):
+                        file_path = file_paths[i]
+                    else:
+                        # Generate file path based on language
+                        language = code_block.get('language', 'python')
+                        extensions = {
+                            'python': '.py',
+                            'javascript': '.js', 
+                            'java': '.java',
+                            'cpp': '.cpp',
+                            'c': '.c',
+                            'rust': '.rs',
+                            'go': '.go',
+                            'html': '.html',
+                            'css': '.css'
+                        }
+                        extension = extensions.get(language, '.txt')
+                        file_path = f"generated_code_{i+1}{extension}"
+                    
+                    # Create the file
+                    result = await self.code_generator.create_file(
+                        file_path,
+                        code_block['code'],
+                        f"Generated from request: {user_input[:50]}...",
+                        overwrite=False
+                    )
+                    
+                    if result['success']:
+                        created_files.append({
+                            'path': result['path'],
+                            'size': result['size'],
+                            'lines': result['lines']
+                        })
+                
+                # Add file creation summary to response
+                if created_files:
+                    file_summary = "\n\n📁 **Files Created:**\n"
+                    for file_info in created_files:
+                        file_summary += f"✅ `{file_info['path']}` ({file_info['lines']} lines, {file_info['size']} bytes)\n"
+                    
+                    ai_response += file_summary
+                    ai_response += "\n🎯 **Files are ready in your project directory!**"
+            
+            return ai_response
+            
+        except Exception as e:
+            return f"❌ Error during code generation: {str(e)}\n\n{ai_response if 'ai_response' in locals() else ''}"
+    
+    def _extract_code_blocks(self, text: str) -> List[Dict[str, str]]:
+        """Extract code blocks from markdown-formatted text"""
+        import re
+        
+        # Pattern to match code blocks with language specification
+        pattern = r'```(\w+)?\n(.*?)```'
+        matches = re.findall(pattern, text, re.DOTALL)
+        
+        code_blocks = []
+        for language, code in matches:
+            code_blocks.append({
+                'language': language or 'text',
+                'code': code.strip()
+            })
+        
+        # Also look for inline code that might be complete files
+        if not code_blocks:
+            # Look for code patterns without markdown
+            lines = text.split('\n')
+            potential_code = []
+            in_code_section = False
+            
+            for line in lines:
+                # Common code indicators
+                if any(indicator in line for indicator in ['def ', 'class ', 'import ', 'function', 'var ', 'const ', '#!/']):
+                    in_code_section = True
+                
+                if in_code_section:
+                    potential_code.append(line)
+                
+                # End of code section
+                if line.strip() == '' and in_code_section and len(potential_code) > 3:
+                    in_code_section = False
+                    if potential_code:
+                        code_blocks.append({
+                            'language': 'python',  # Default assumption
+                            'code': '\n'.join(potential_code).strip()
+                        })
+                        potential_code = []
+        
+        return code_blocks
+    
+    def _extract_file_paths(self, user_input: str) -> List[str]:
+        """Extract file paths from user input"""
+        import re
+        
+        file_paths = []
+        
+        # Look for explicit file paths
+        patterns = [
+            r'(?:save to|write to|create|in file|to file)\s+["\']?([^\s"\']+\.[a-zA-Z]+)["\']?',
+            r'["\']([^\s"\']+\.[a-zA-Z]+)["\']',
+            r'(\w+\.[a-zA-Z]+)',
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, user_input, re.IGNORECASE)
+            file_paths.extend(matches)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_paths = []
+        for path in file_paths:
+            if path not in seen:
+                seen.add(path)
+                unique_paths.append(path)
+        
+        return unique_paths
+    
+    async def create_file_directly(self, file_path: str, content: str, description: str = None) -> Dict[str, Any]:
+        """Direct method to create files in the project"""
+        if not self.code_generator:
+            return {
+                'success': False,
+                'error': 'Code generator not available'
+            }
+        
+        return await self.code_generator.create_file(
+            file_path,
+            content,
+            description or f"File created directly: {file_path}"
+        )

@@ -314,26 +314,53 @@ class AnimatedStatus:
         self.is_animating = False
         self.current_task = None
         
-        # Animation frames for different states
+        # Animation frames for different states with flickering effects
         self.loading_frames = [
             "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
         ]
         
+        # Flickering thinking frames with intensity variations
         self.thinking_frames = [
-            "🧠 ", "💭 ", "⚡ ", "✨ ", "💫 ", "🌟 "
+            ("🧠", "bright"), ("💭", "dim"), ("🧠", "bright"), ("⚡", "flash"), 
+            ("✨", "sparkle"), ("💫", "dim"), ("🌟", "bright"), ("💭", "dim"),
+            ("🧠", "bright"), ("⚡", "flash"), ("💭", "dim"), ("✨", "sparkle")
         ]
         
+        # Building frames with construction rhythm
         self.building_frames = [
-            "🏗️ ", "⚙️ ", "🔨 ", "🎨 ", "🧪 ", "⚡ "
+            ("🏗️", "bright"), ("⚙️", "dim"), ("🔨", "impact"), ("🏗️", "bright"),
+            ("🎨", "creative"), ("⚙️", "dim"), ("🧪", "experiment"), ("🔨", "impact"),
+            ("⚡", "flash"), ("🏗️", "bright"), ("🎨", "creative"), ("⚙️", "dim")
         ]
         
+        # Success frames with celebration intensity
         self.success_frames = [
-            "✨", "🌟", "⭐", "💫", "🎉", "🔥", "💎", "👑"
+            ("✨", "sparkle"), ("🌟", "bright"), ("⭐", "twinkle"), ("💫", "dim"),
+            ("🎉", "celebrate"), ("🔥", "intense"), ("💎", "brilliant"), ("👑", "royal"),
+            ("✨", "sparkle"), ("🚀", "launch"), ("💎", "brilliant"), ("🎉", "celebrate")
         ]
+        
+        # Color/intensity mappings for different effect types
+        self.effect_styles = {
+            "bright": "\033[1;97m",      # Bright white
+            "dim": "\033[2;90m",         # Dim gray
+            "flash": "\033[5;93m",       # Flashing yellow
+            "sparkle": "\033[1;95m",     # Bright magenta
+            "impact": "\033[1;91m",      # Bright red
+            "creative": "\033[1;96m",    # Bright cyan
+            "experiment": "\033[1;92m",  # Bright green
+            "celebrate": "\033[1;94m",   # Bright blue
+            "intense": "\033[1;31m",     # Intense red
+            "brilliant": "\033[1;33m",   # Bright yellow
+            "royal": "\033[1;35m",       # Bright magenta
+            "launch": "\033[1;32m",      # Bright green
+            "twinkle": "\033[1;37m",     # Bright white
+            "reset": "\033[0m"           # Reset
+        }
         
         self.frame_index = 0
         
-    def _get_animation_frames(self, category: str) -> List[str]:
+    def _get_animation_frames(self, category: str):
         """Get animation frames for a category"""
         if category == "thinking":
             return self.thinking_frames
@@ -342,7 +369,8 @@ class AnimatedStatus:
         elif category == "success":
             return self.success_frames
         else:
-            return self.loading_frames
+            # Convert loading frames to tuple format for consistency
+            return [(frame, "bright") for frame in self.loading_frames]
     
     async def animate_status(
         self, 
@@ -372,19 +400,42 @@ class AnimatedStatus:
         
         try:
             while time.time() - start_time < duration and self.is_animating:
-                # Get current frame
-                frame = frames[self.frame_index % len(frames)]
+                # Get current frame and effect
+                frame_data = frames[self.frame_index % len(frames)]
                 
-                # Display animated message
+                if isinstance(frame_data, tuple):
+                    frame_icon, effect_type = frame_data
+                    # Apply color/intensity effect
+                    style = self.effect_styles.get(effect_type, self.effect_styles["bright"])
+                    reset = self.effect_styles["reset"]
+                    frame = f"{style}{frame_icon}{reset}"
+                else:
+                    frame = frame_data
+                
+                # Display animated message with flickering
                 if self.console:
-                    # Clear current line and display animated status
-                    self.console.print(f"\r{frame} {message}", end="")
+                    # Use rich console for better color support
+                    self.console.print(f"\r{frame} {message}", end="", highlight=False)
                 else:
                     print(f"\r{frame} {message}", end="", flush=True)
                 
-                # Update frame and wait
+                # Update frame and wait (variable speed for different effects)
                 self.frame_index = (self.frame_index + 1) % len(frames)
-                await asyncio.sleep(0.3)  # Animation speed
+                
+                # Variable animation speed based on effect type
+                if isinstance(frame_data, tuple):
+                    _, effect_type = frame_data
+                    speed_map = {
+                        "flash": 0.15,      # Fast flashing
+                        "sparkle": 0.2,     # Quick sparkle
+                        "impact": 0.25,     # Impact timing
+                        "bright": 0.3,      # Normal speed
+                        "dim": 0.4,         # Slower for dim effects
+                        "twinkle": 0.2      # Quick twinkle
+                    }
+                    await asyncio.sleep(speed_map.get(effect_type, 0.3))
+                else:
+                    await asyncio.sleep(0.3)  # Default animation speed
             
             # Final static display
             icon = self.genz.get_category_icon(category)
@@ -416,27 +467,49 @@ class AnimatedStatus:
         """Animate a success status"""
         return await self.animate_status("success", duration, message)
     
-    async def animate_phase_transition(self, from_phase: str, to_phase: str, duration: float = 2.5) -> str:
-        """Animate a phase transition with special effects"""
+    async def animate_phase_transition(self, from_phase: str, to_phase: str, duration: float = 3.0) -> str:
+        """Animate a phase transition with special flickering effects"""
         message = self.genz.get_phase_transition_message(from_phase, to_phase)
         
-        # Special transition animation
-        transition_frames = ["⚡", "✨", "🌟", "💫", "🚀"]
+        # Special transition animation with flickering intensity
+        transition_frames = [
+            ("⚡", "flash"), ("✨", "sparkle"), ("🌟", "bright"), ("💫", "twinkle"),
+            ("🚀", "launch"), ("⚡", "flash"), ("🎯", "impact"), ("✨", "sparkle"),
+            ("🌟", "bright"), ("💫", "dim"), ("🚀", "launch"), ("⚡", "flash")
+        ]
         start_time = time.time()
+        frame_index = 0
         
         while time.time() - start_time < duration:
-            frame = transition_frames[self.frame_index % len(transition_frames)]
+            frame_icon, effect_type = transition_frames[frame_index % len(transition_frames)]
+            
+            # Apply intensive flickering for transitions
+            style = self.effect_styles.get(effect_type, self.effect_styles["bright"])
+            reset = self.effect_styles["reset"]
+            frame = f"{style}{frame_icon}{reset}"
             
             if self.console:
-                self.console.print(f"\r{frame} {message}", end="")
+                self.console.print(f"\r{frame} {message}", end="", highlight=False)
             else:
                 print(f"\r{frame} {message}", end="", flush=True)
                 
-            self.frame_index = (self.frame_index + 1) % len(transition_frames)
-            await asyncio.sleep(0.2)
+            frame_index = (frame_index + 1) % len(transition_frames)
+            
+            # Fast transition animation
+            speed_map = {
+                "flash": 0.1,
+                "sparkle": 0.15,
+                "impact": 0.2,
+                "launch": 0.12,
+                "twinkle": 0.18
+            }
+            await asyncio.sleep(speed_map.get(effect_type, 0.15))
         
-        # Final display
-        final_message = f"🎯 {message}"
+        # Final display with celebration effect
+        final_style = self.effect_styles["brilliant"]
+        reset = self.effect_styles["reset"]
+        final_message = f"{final_style}🎯{reset} {message}"
+        
         if self.console:
             self.console.print(f"\r{final_message}")
         else:
@@ -484,28 +557,59 @@ class AnimatedStatus:
         self.is_animating = False
     
     async def show_completion_celebration(self, success_message: Optional[str] = None) -> str:
-        """Show a celebration animation for completion"""
+        """Show an intense flickering celebration animation for completion"""
         if not success_message:
             success_message = self.genz.get_success_status()
         
+        # Intense celebration frames with flickering effects
         celebration_frames = [
-            "🎉", "✨", "🔥", "💎", "👑", "🌟", "⭐", "💫", 
-            "🚀", "🎯", "💅", "👾", "🎪", "🎨", "⚡"
+            ("🎉", "celebrate"), ("✨", "sparkle"), ("🔥", "intense"), ("💎", "brilliant"), 
+            ("👑", "royal"), ("🌟", "bright"), ("⭐", "twinkle"), ("💫", "dim"),
+            ("🚀", "launch"), ("🎯", "impact"), ("💅", "sparkle"), ("👾", "flash"),
+            ("🎪", "celebrate"), ("🎨", "creative"), ("⚡", "flash"), ("✨", "sparkle"),
+            ("🔥", "intense"), ("💎", "brilliant"), ("🎉", "celebrate"), ("🌟", "bright")
         ]
         
-        # Celebration sequence
-        for _ in range(20):  # 20 frames of celebration
-            frame = random.choice(celebration_frames)
+        # Intense celebration sequence with rapid flickering
+        for i in range(30):  # 30 frames of intense celebration
+            frame_icon, effect_type = random.choice(celebration_frames)
+            
+            # Apply intense flickering effects
+            style = self.effect_styles.get(effect_type, self.effect_styles["bright"])
+            reset = self.effect_styles["reset"]
+            frame = f"{style}{frame_icon}{reset}"
             
             if self.console:
-                self.console.print(f"\r{frame} {success_message}", end="")
+                self.console.print(f"\r{frame} {success_message}", end="", highlight=False)
             else:
                 print(f"\r{frame} {success_message}", end="", flush=True)
-                
-            await asyncio.sleep(0.15)
+            
+            # Variable speed for dramatic effect
+            if i < 10:  # Start fast
+                await asyncio.sleep(0.08)
+            elif i < 20:  # Medium speed
+                await asyncio.sleep(0.12)
+            else:  # Slow down for finale
+                await asyncio.sleep(0.18)
         
-        # Final success display
-        final_message = f"🎉 {success_message}"
+        # Grand finale with multiple rapid flashes
+        finale_icon = random.choice(["🎉", "✨", "🚀", "💎", "👑"])
+        for _ in range(5):
+            brilliant_style = self.effect_styles["brilliant"]
+            reset = self.effect_styles["reset"]
+            finale_frame = f"{brilliant_style}{finale_icon}{reset}"
+            
+            if self.console:
+                self.console.print(f"\r{finale_frame} {success_message}", end="", highlight=False)
+            else:
+                print(f"\r{finale_frame} {success_message}", end="", flush=True)
+            await asyncio.sleep(0.1)
+        
+        # Final success display with permanent glow
+        final_style = self.effect_styles["brilliant"]
+        reset = self.effect_styles["reset"]
+        final_message = f"{final_style}🎉{reset} {success_message}"
+        
         if self.console:
             self.console.print(f"\r{final_message}")
         else:
