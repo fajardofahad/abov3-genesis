@@ -10,6 +10,7 @@ import json
 
 from .ollama_client import OllamaClient
 from .code_generator import CodeGenerator
+from .project_intelligence import ProjectIntelligence
 
 class Assistant:
     """
@@ -30,11 +31,14 @@ class Assistant:
         # This will be updated by the main app with the saved model
         self.default_model = "llama3:latest"
         
-        # Initialize code generator if we have project context
+        # Initialize code generator and project intelligence if we have project context
         self.code_generator = None
+        self.project_intelligence = None
         if project_context and 'project_path' in project_context:
             from pathlib import Path
-            self.code_generator = CodeGenerator(Path(project_context['project_path']))
+            project_path = Path(project_context['project_path'])
+            self.code_generator = CodeGenerator(project_path)
+            self.project_intelligence = ProjectIntelligence(project_path)
     
     async def process(self, user_input: str, context: Dict[str, Any] = None) -> str:
         """Process user input and return response"""
@@ -43,18 +47,21 @@ class Assistant:
             if context:
                 self.project_context.update(context)
                 
-                # Initialize or update code generator if we have project path
+                # Initialize or update code generator and project intelligence if we have project path
                 if 'project_path' in context and not self.code_generator:
                     from pathlib import Path
-                    self.code_generator = CodeGenerator(Path(context['project_path']))
-                    print(f"[DEBUG] Initialized CodeGenerator with path: {context['project_path']}")
+                    project_path = Path(context['project_path'])
+                    self.code_generator = CodeGenerator(project_path)
+                    self.project_intelligence = ProjectIntelligence(project_path)
+                    print(f"[DEBUG] Initialized CodeGenerator and ProjectIntelligence with path: {context['project_path']}")
                 elif 'project_path' in context and self.code_generator:
-                    # Update code generator if project path changed
+                    # Update if project path changed
                     from pathlib import Path
                     new_path = Path(context['project_path'])
                     if new_path != self.code_generator.project_path:
                         self.code_generator = CodeGenerator(new_path)
-                        print(f"[DEBUG] Updated CodeGenerator with new path: {context['project_path']}")
+                        self.project_intelligence = ProjectIntelligence(new_path)
+                        print(f"[DEBUG] Updated CodeGenerator and ProjectIntelligence with new path: {context['project_path']}")
                 else:
                     print(f"[DEBUG] Context: {context}, Code generator exists: {self.code_generator is not None}")
             
@@ -68,6 +75,11 @@ class Assistant:
             # Check if we need to switch agents automatically
             await self._auto_switch_agent_if_needed(user_input, context)
             
+            # Analyze project if we have project intelligence and it's needed
+            if self.project_intelligence and self._should_analyze_project(user_input):
+                print("[DEBUG] Running project analysis...")
+                await self.project_intelligence.analyze_project()
+            
             # Get model and system prompt from agent
             model = self.agent.model if self.agent else self.default_model
             system_prompt = self._build_system_prompt()
@@ -80,15 +92,19 @@ class Assistant:
             messages = self._prepare_messages(user_input, system_prompt)
             
             # Check for different types of requests in priority order
+            is_project_status = self._is_project_status_request(user_input)
             is_file_operation = self._is_file_operation_request(user_input)
             is_debug_request = self._is_debug_request(user_input)
             is_code_request = self._is_code_generation_request(user_input)
             
+            print(f"[DEBUG] Project status request: {is_project_status}")
             print(f"[DEBUG] File operation request: {is_file_operation}")
             print(f"[DEBUG] Debug/error fixing request: {is_debug_request}")
             print(f"[DEBUG] Code generation request: {is_code_request}")
             
-            if is_file_operation:
+            if is_project_status:
+                response_text = await self._handle_project_status(user_input, messages, model)
+            elif is_file_operation:
                 response_text = await self._handle_file_operations(user_input)
             elif is_debug_request:
                 response_text = await self._handle_debug_request(user_input, messages, model)
@@ -97,6 +113,14 @@ class Assistant:
             else:
                 # Get AI response
                 response_text = await self._get_ai_response(model, messages)
+            
+            # Record interaction for learning if we have project intelligence
+            if self.project_intelligence:
+                action_type = 'project_status' if is_project_status else 'file_op' if is_file_operation else 'debug' if is_debug_request else 'code_gen' if is_code_request else 'conversation'
+                await self.project_intelligence.record_interaction(
+                    user_input, response_text, 
+                    action_taken=action_type
+                )
             
             # Add assistant response to history
             self.conversation_history.append({
@@ -112,6 +136,17 @@ class Assistant:
             error_msg = f"Error processing request: {str(e)}"
             print(error_msg)
             return self._get_error_response(str(e))
+    
+    def _should_analyze_project(self, user_input: str) -> bool:
+        """Determine if we should run project analysis based on user input"""
+        analysis_triggers = [
+            'update', 'modify', 'change', 'add', 'create', 'build', 'develop',
+            'what is this project', 'explain this project', 'project status',
+            'what does this do', 'how does this work', 'analyze', 'review'
+        ]
+        
+        user_input_lower = user_input.lower()
+        return any(trigger in user_input_lower for trigger in analysis_triggers)
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt with context"""
@@ -138,8 +173,14 @@ CAPABILITIES:
         if self.agent and hasattr(self.agent, 'system_prompt') and self.agent.system_prompt:
             base_prompt += f"\n\nSPECIALIZATION:\n{self.agent.system_prompt}"
         
-        # Add project context
-        if self.project_context:
+        # Add project context from project intelligence or legacy context
+        if self.project_intelligence:
+            # Use intelligent project analysis
+            project_context = self.project_intelligence.get_context_for_ai()
+            if project_context.strip() != "PROJECT CONTEXT:\n- Name: " + str(self.project_intelligence.project_path.name):
+                base_prompt += f"\n\n{project_context}"
+        elif self.project_context:
+            # Fallback to legacy project context
             project_info = self.project_context.get('project', {})
             if project_info:
                 context_info = f"""
@@ -1424,6 +1465,128 @@ Format your response with clear explanations and provide complete corrected code
                 results.append(f"**{filename}:** No obvious issues detected")
         
         return '\n\n'.join(results) if results else "No static analysis issues detected."
+    
+    def _is_project_status_request(self, user_input: str) -> bool:
+        """Check if user is asking about project status or understanding"""
+        user_input_lower = user_input.lower()
+        
+        status_keywords = [
+            'what is this project', 'explain this project', 'project status',
+            'what does this do', 'how does this work', 'what am i working on',
+            'project summary', 'tell me about this project', 'analyze project',
+            'review project', 'project overview', 'what\'s this project about',
+            'understand this project', 'project info', 'project details',
+            'what language is this', 'what framework', 'what type of project'
+        ]
+        
+        return any(keyword in user_input_lower for keyword in status_keywords)
+    
+    async def _handle_project_status(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle project status and analysis requests"""
+        if not self.project_intelligence:
+            return "❌ Project analysis requires a project directory. Please set up a project first."
+        
+        try:
+            print("[DEBUG] Handling project status request")
+            
+            # Force analysis if requested
+            await self.project_intelligence.analyze_project(force_reanalysis=True)
+            
+            # Get project summary
+            summary = self.project_intelligence.get_project_summary()
+            knowledge = self.project_intelligence.project_knowledge
+            
+            # Create detailed status response
+            status_parts = [
+                "🔍 **Project Analysis Complete**",
+                f"📊 **Summary:** {summary}",
+                ""
+            ]
+            
+            # Add detailed information
+            if knowledge.get('confidence_score', 0) >= 0.5:
+                if knowledge.get('structure'):
+                    structure = knowledge['structure']
+                    status_parts.extend([
+                        "📁 **Project Structure:**",
+                        f"- Total files: {structure.get('total_files', 0)}",
+                        f"- Directories: {len(structure.get('directories', []))}",
+                        f"- Project size: {structure.get('size_bytes', 0)} bytes",
+                        ""
+                    ])
+                
+                if knowledge.get('languages'):
+                    status_parts.append("💻 **Languages Used:**")
+                    for lang, info in knowledge['languages'].items():
+                        status_parts.append(f"- {lang.title()}: {info['files']} files ({info['percentage']:.1f}%)")
+                    status_parts.append("")
+                
+                if knowledge.get('frameworks'):
+                    frameworks = ', '.join(knowledge['frameworks'])
+                    status_parts.extend([
+                        "🛠️ **Frameworks & Libraries:**",
+                        f"- {frameworks}",
+                        ""
+                    ])
+                
+                if knowledge.get('entry_points'):
+                    entry_points = ', '.join(knowledge['entry_points'])
+                    status_parts.extend([
+                        "🚀 **Entry Points:**",
+                        f"- {entry_points}",
+                        ""
+                    ])
+                
+                if knowledge.get('key_files'):
+                    key_files = ', '.join(knowledge['key_files'])
+                    status_parts.extend([
+                        "📄 **Key Files:**",
+                        f"- {key_files}",
+                        ""
+                    ])
+                
+                # Add recent work context
+                interactions = self.project_intelligence.interactions
+                if interactions:
+                    status_parts.extend([
+                        "📝 **Recent Activity:**",
+                    ])
+                    for interaction in interactions[-3:]:  # Last 3 interactions
+                        timestamp = datetime.fromisoformat(interaction['timestamp']).strftime("%H:%M")
+                        request = interaction['user_request'][:60] + '...' if len(interaction['user_request']) > 60 else interaction['user_request']
+                        status_parts.append(f"- [{timestamp}] {request}")
+                    status_parts.append("")
+                
+                confidence_emoji = "🔥" if knowledge['confidence_score'] >= 0.8 else "✅" if knowledge['confidence_score'] >= 0.6 else "⚠️"
+                status_parts.append(f"{confidence_emoji} **Analysis Confidence:** {knowledge['confidence_score']:.0%}")
+            else:
+                status_parts.extend([
+                    "⚠️ **Limited Information Available**",
+                    "The project analysis is still building understanding of your codebase.",
+                    "Continue working with the project to improve analysis accuracy."
+                ])
+            
+            # Enhanced AI response with project context
+            if 'what' in user_input.lower() or 'how' in user_input.lower() or 'explain' in user_input.lower():
+                # User wants detailed explanation, enhance with AI analysis
+                enhanced_prompt = f"""
+Based on the project analysis, provide a detailed explanation of this project:
+
+{self.project_intelligence.get_context_for_ai()}
+
+USER QUESTION: {user_input}
+
+Please provide a comprehensive explanation of what this project does, how it works, and its purpose. Use the analysis data above and be specific about the technologies and structure.
+"""
+                enhanced_messages = messages[:-1] + [{"role": "user", "content": enhanced_prompt}]
+                ai_explanation = await self._get_ai_response(model, enhanced_messages)
+                
+                return '\n'.join(status_parts) + f"\n\n🤖 **AI Analysis:**\n{ai_explanation}"
+            else:
+                return '\n'.join(status_parts)
+            
+        except Exception as e:
+            return f"❌ Error during project analysis: {str(e)}"
     
     async def create_file_directly(self, file_path: str, content: str, description: str = None) -> Dict[str, Any]:
         """Direct method to create files in the project"""
