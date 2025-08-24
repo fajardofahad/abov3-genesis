@@ -1,0 +1,33 @@
+# ABOV3 Genesis - From Idea to Built Reality
+# Core dependencies for AI-powered coding assistant
+
+# AI and LLM Integration
+ollama>=0.2.0              # Ollama client for local AI models
+
+# Interactive Terminal Interface
+prompt_toolkit>=3.0.36     # Advanced terminal UI with async support
+rich>=13.5.0               # Beautiful terminal formatting and progress bars
+pygments>=2.15.0           # Syntax highlighting for code
+
+# CLI Framework
+click>=8.1.0               # Command-line interface framework
+
+# Configuration and Data
+pyyaml>=6.0.0              # YAML configuration files
+jinja2>=3.1.0              # Template engine for code generation
+
+# Async File Operations
+aiofiles>=23.0.0           # Async file I/O operations
+
+# System Utilities
+psutil>=5.9.0              # System and process utilities
+gitpython>=3.1.0           # Git integration
+
+# Optional Development Dependencies
+# Install with: pip install abov3-genesis[dev]
+# pytest>=7.0.0            # Testing framework
+# pytest-asyncio>=0.21.0   # Async testing support
+# black>=23.0.0            # Code formatting
+# flake8>=6.0.0            # Linting
+# mypy>=1.0.0              # Type checking
+# coverage>=7.0.0          # Code coverage
