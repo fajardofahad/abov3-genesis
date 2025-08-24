@@ -79,11 +79,16 @@ class Assistant:
             # Prepare messages for chat
             messages = self._prepare_messages(user_input, system_prompt)
             
-            # Check if this is a code generation request
+            # Check for different types of requests in priority order
+            is_file_operation = self._is_file_operation_request(user_input)
             is_code_request = self._is_code_generation_request(user_input)
-            print(f"[DEBUG] Code generation request detected: {is_code_request}")
             
-            if is_code_request:
+            print(f"[DEBUG] File operation request: {is_file_operation}")
+            print(f"[DEBUG] Code generation request: {is_code_request}")
+            
+            if is_file_operation:
+                response_text = await self._handle_file_operations(user_input)
+            elif is_code_request:
                 response_text = await self._handle_code_generation(user_input, messages, model)
             else:
                 # Get AI response
@@ -969,6 +974,163 @@ Please provide the complete modified file content(s) with the requested changes.
                 unique_paths.append(path)
         
         return unique_paths
+    
+    def _is_file_operation_request(self, user_input: str) -> bool:
+        """Check if user input is requesting a simple file operation"""
+        user_input_lower = user_input.lower()
+        
+        # File operation patterns
+        file_operation_keywords = [
+            'rename', 'move', 'delete', 'copy', 'duplicate', 
+            'remove file', 'delete file', 'rename file',
+            'move file', 'copy file', 'duplicate file'
+        ]
+        
+        # Check for patterns like "rename X to Y" or "rename X.html to Y.html"
+        rename_patterns = [
+            r'rename\s+[\w.-]+\s+to\s+[\w.-]+',
+            r'rename\s+[\w.-]+\.[\w]+\s+to\s+[\w.-]+\.[\w]+',
+            r'change\s+[\w.-]+\s+to\s+[\w.-]+',
+            r'move\s+[\w.-]+\s+to\s+[\w.-]+',
+        ]
+        
+        # Check direct keywords
+        if any(keyword in user_input_lower for keyword in file_operation_keywords):
+            return True
+        
+        # Check rename patterns
+        import re
+        for pattern in rename_patterns:
+            if re.search(pattern, user_input_lower):
+                return True
+        
+        return False
+    
+    async def _handle_file_operations(self, user_input: str) -> str:
+        """Handle simple file operations like rename, move, delete, etc."""
+        if not self.code_generator:
+            return "❌ File operations require a project directory. Please set up a project first."
+        
+        try:
+            import os
+            import re
+            from pathlib import Path
+            
+            user_input_lower = user_input.lower()
+            project_path = Path(self.code_generator.project_path)
+            
+            # Handle rename operations
+            rename_match = re.search(r'rename\s+([\w.-]+(?:\.[\w]+)?)\s+to\s+([\w.-]+(?:\.[\w]+)?)', user_input_lower)
+            if rename_match:
+                old_name = rename_match.group(1)
+                new_name = rename_match.group(2)
+                
+                # Find the file in project directory
+                old_file_path = None
+                for file_path in project_path.glob('**/*'):
+                    if file_path.is_file() and file_path.name.lower() == old_name.lower():
+                        old_file_path = file_path
+                        break
+                
+                if not old_file_path:
+                    return f"❌ File '{old_name}' not found in project directory."
+                
+                # Create new file path
+                new_file_path = old_file_path.parent / new_name
+                
+                if new_file_path.exists():
+                    return f"❌ File '{new_name}' already exists. Choose a different name."
+                
+                # Perform the rename
+                old_file_path.rename(new_file_path)
+                
+                return f"✅ Successfully renamed `{old_name}` to `{new_name}`\n📁 Location: {new_file_path.relative_to(project_path)}"
+            
+            # Handle move operations
+            move_match = re.search(r'move\s+([\w.-]+(?:\.[\w]+)?)\s+to\s+([\w/.-]+)', user_input_lower)
+            if move_match:
+                file_name = move_match.group(1)
+                target_location = move_match.group(2)
+                
+                # Find the file
+                old_file_path = None
+                for file_path in project_path.glob('**/*'):
+                    if file_path.is_file() and file_path.name.lower() == file_name.lower():
+                        old_file_path = file_path
+                        break
+                
+                if not old_file_path:
+                    return f"❌ File '{file_name}' not found in project directory."
+                
+                # Create target directory if it doesn't exist
+                if '/' in target_location or '\\' in target_location:
+                    target_dir = project_path / target_location.replace('\\', '/')
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    new_file_path = target_dir / old_file_path.name
+                else:
+                    new_file_path = project_path / target_location
+                
+                if new_file_path.exists():
+                    return f"❌ Target location already has a file with that name."
+                
+                # Perform the move
+                old_file_path.rename(new_file_path)
+                
+                return f"✅ Successfully moved `{file_name}` to `{new_file_path.relative_to(project_path)}`"
+            
+            # Handle delete operations
+            if any(keyword in user_input_lower for keyword in ['delete', 'remove']):
+                delete_match = re.search(r'(?:delete|remove)\s+(?:file\s+)?([\w.-]+(?:\.[\w]+)?)', user_input_lower)
+                if delete_match:
+                    file_name = delete_match.group(1)
+                    
+                    # Find the file
+                    file_to_delete = None
+                    for file_path in project_path.glob('**/*'):
+                        if file_path.is_file() and file_path.name.lower() == file_name.lower():
+                            file_to_delete = file_path
+                            break
+                    
+                    if not file_to_delete:
+                        return f"❌ File '{file_name}' not found in project directory."
+                    
+                    # Perform the deletion
+                    file_to_delete.unlink()
+                    
+                    return f"✅ Successfully deleted `{file_name}`"
+            
+            # Handle copy operations
+            copy_match = re.search(r'(?:copy|duplicate)\s+([\w.-]+(?:\.[\w]+)?)\s+(?:to\s+|as\s+)?([\w.-]+(?:\.[\w]+)?)', user_input_lower)
+            if copy_match:
+                source_name = copy_match.group(1)
+                target_name = copy_match.group(2)
+                
+                # Find source file
+                source_file = None
+                for file_path in project_path.glob('**/*'):
+                    if file_path.is_file() and file_path.name.lower() == source_name.lower():
+                        source_file = file_path
+                        break
+                
+                if not source_file:
+                    return f"❌ File '{source_name}' not found in project directory."
+                
+                target_file = source_file.parent / target_name
+                
+                if target_file.exists():
+                    return f"❌ File '{target_name}' already exists."
+                
+                # Copy the file
+                import shutil
+                shutil.copy2(source_file, target_file)
+                
+                return f"✅ Successfully copied `{source_name}` to `{target_name}`"
+            
+            # If we get here, we couldn't parse the file operation
+            return f"❌ I couldn't understand the file operation. Try:\n• `rename oldfile.txt to newfile.txt`\n• `move file.txt to folder/`\n• `delete file.txt`\n• `copy file.txt to backup.txt`"
+            
+        except Exception as e:
+            return f"❌ Error during file operation: {str(e)}"
     
     async def create_file_directly(self, file_path: str, content: str, description: str = None) -> Dict[str, Any]:
         """Direct method to create files in the project"""
