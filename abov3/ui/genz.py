@@ -380,16 +380,7 @@ class AnimatedStatus:
         callback: Optional[Callable] = None
     ) -> str:
         """
-        Display an animated status message
-        
-        Args:
-            category: Status category (thinking, building, etc.)
-            duration: How long to animate (seconds)
-            message: Custom message, if None will get random from category
-            callback: Optional function to call when animation completes
-        
-        Returns:
-            The final status message
+        Display an animated status message using Rich Live for proper in-place updates
         """
         if not message:
             message = self.genz.get_status(category)
@@ -399,58 +390,85 @@ class AnimatedStatus:
         self.is_animating = True
         
         try:
-            while time.time() - start_time < duration and self.is_animating:
-                # Get current frame and effect
-                frame_data = frames[self.frame_index % len(frames)]
-                
-                if isinstance(frame_data, tuple):
-                    frame_icon, effect_type = frame_data
-                    # Apply color/intensity effect
-                    style = self.effect_styles.get(effect_type, self.effect_styles["bright"])
-                    reset = self.effect_styles["reset"]
-                    frame = f"{style}{frame_icon}{reset}"
-                else:
-                    frame = frame_data
-                
-                # Display animated message with flickering
-                if self.console:
-                    # Use rich console for better color support
-                    self.console.print(f"\r{frame} {message}", end="", highlight=False)
-                else:
-                    print(f"\r{frame} {message}", end="", flush=True)
-                
-                # Update frame and wait (variable speed for different effects)
-                self.frame_index = (self.frame_index + 1) % len(frames)
-                
-                # Variable animation speed based on effect type
-                if isinstance(frame_data, tuple):
-                    _, effect_type = frame_data
-                    speed_map = {
-                        "flash": 0.15,      # Fast flashing
-                        "sparkle": 0.2,     # Quick sparkle
-                        "impact": 0.25,     # Impact timing
-                        "bright": 0.3,      # Normal speed
-                        "dim": 0.4,         # Slower for dim effects
-                        "twinkle": 0.2      # Quick twinkle
-                    }
-                    await asyncio.sleep(speed_map.get(effect_type, 0.3))
-                else:
-                    await asyncio.sleep(0.3)  # Default animation speed
-            
-            # Final static display
-            icon = self.genz.get_category_icon(category)
-            final_message = f"{icon} {message}"
-            
             if self.console:
-                self.console.print(f"\r{final_message}")
+                from rich.live import Live
+                from rich.text import Text
+                
+                with Live(console=self.console, refresh_per_second=8, transient=True) as live:
+                    while time.time() - start_time < duration and self.is_animating:
+                        # Get current frame and effect
+                        frame_data = frames[self.frame_index % len(frames)]
+                        
+                        # Create animated text with Rich styling
+                        animated_text = Text()
+                        if isinstance(frame_data, tuple):
+                            frame_icon, effect_type = frame_data
+                            # Map effects to Rich styles
+                            style_map = {
+                                "bright": "bold bright_white",
+                                "dim": "dim white", 
+                                "flash": "bold bright_yellow",
+                                "sparkle": "bold bright_magenta",
+                                "impact": "bold bright_red",
+                                "creative": "bold bright_cyan",
+                                "experiment": "bold bright_green",
+                                "celebrate": "bold bright_blue",
+                                "intense": "bold red",
+                                "brilliant": "bold bright_yellow",
+                                "royal": "bold bright_magenta",
+                                "launch": "bold bright_green",
+                                "twinkle": "bold white"
+                            }
+                            style = style_map.get(effect_type, "bold white")
+                            animated_text.append(frame_icon, style=style)
+                            animated_text.append(f" {message}")
+                        else:
+                            animated_text.append(f"{frame_data} {message}")
+                        
+                        # Update the live display
+                        live.update(animated_text)
+                        
+                        # Update frame and wait
+                        self.frame_index = (self.frame_index + 1) % len(frames)
+                        
+                        # Variable animation speed
+                        if isinstance(frame_data, tuple):
+                            _, effect_type = frame_data
+                            speed_map = {
+                                "flash": 0.15,
+                                "sparkle": 0.2,
+                                "impact": 0.25,
+                                "bright": 0.3,
+                                "dim": 0.4,
+                                "twinkle": 0.2
+                            }
+                            await asyncio.sleep(speed_map.get(effect_type, 0.3))
+                        else:
+                            await asyncio.sleep(0.3)
+                
+                # Final static display after animation
+                icon = self.genz.get_category_icon(category)
+                final_text = Text()
+                final_text.append(icon, style="bold")
+                final_text.append(f" {message}")
+                self.console.print(final_text)
+                
             else:
-                print(f"\r{final_message}")
+                # Fallback for non-Rich console
+                while time.time() - start_time < duration and self.is_animating:
+                    frame_data = frames[self.frame_index % len(frames)]
+                    frame_icon = frame_data[0] if isinstance(frame_data, tuple) else frame_data
+                    print(f"\r{frame_icon} {message}", end="", flush=True)
+                    self.frame_index = (self.frame_index + 1) % len(frames)
+                    await asyncio.sleep(0.3)
+                
+                print(f"\r{self.genz.get_category_icon(category)} {message}")
             
             # Call callback if provided
             if callback:
                 await callback()
                 
-            return final_message
+            return f"{self.genz.get_category_icon(category)} {message}"
             
         finally:
             self.is_animating = False
@@ -570,49 +588,59 @@ class AnimatedStatus:
             ("🔥", "intense"), ("💎", "brilliant"), ("🎉", "celebrate"), ("🌟", "bright")
         ]
         
-        # Intense celebration sequence with rapid flickering
-        for i in range(30):  # 30 frames of intense celebration
-            frame_icon, effect_type = random.choice(celebration_frames)
-            
-            # Apply intense flickering effects
-            style = self.effect_styles.get(effect_type, self.effect_styles["bright"])
-            reset = self.effect_styles["reset"]
-            frame = f"{style}{frame_icon}{reset}"
-            
-            if self.console:
-                self.console.print(f"\r{frame} {success_message}", end="", highlight=False)
-            else:
-                print(f"\r{frame} {success_message}", end="", flush=True)
-            
-            # Variable speed for dramatic effect
-            if i < 10:  # Start fast
-                await asyncio.sleep(0.08)
-            elif i < 20:  # Medium speed
-                await asyncio.sleep(0.12)
-            else:  # Slow down for finale
-                await asyncio.sleep(0.18)
-        
-        # Grand finale with multiple rapid flashes
-        finale_icon = random.choice(["🎉", "✨", "🚀", "💎", "👑"])
-        for _ in range(5):
-            brilliant_style = self.effect_styles["brilliant"]
-            reset = self.effect_styles["reset"]
-            finale_frame = f"{brilliant_style}{finale_icon}{reset}"
-            
-            if self.console:
-                self.console.print(f"\r{finale_frame} {success_message}", end="", highlight=False)
-            else:
-                print(f"\r{finale_frame} {success_message}", end="", flush=True)
-            await asyncio.sleep(0.1)
-        
-        # Final success display with permanent glow
-        final_style = self.effect_styles["brilliant"]
-        reset = self.effect_styles["reset"]
-        final_message = f"{final_style}🎉{reset} {success_message}"
-        
         if self.console:
-            self.console.print(f"\r{final_message}")
-        else:
-            print(f"\r{final_message}")
+            from rich.live import Live
+            from rich.text import Text
             
-        return final_message
+            with Live(console=self.console, refresh_per_second=12, transient=True) as live:
+                # Intense celebration sequence with rapid flickering
+                for i in range(30):  # 30 frames of intense celebration
+                    frame_icon, effect_type = random.choice(celebration_frames)
+                    
+                    # Map to Rich styles
+                    style_map = {
+                        "celebrate": "bold bright_blue",
+                        "sparkle": "bold bright_magenta", 
+                        "intense": "bold red",
+                        "brilliant": "bold bright_yellow",
+                        "royal": "bold bright_magenta",
+                        "bright": "bold bright_white",
+                        "twinkle": "bold white",
+                        "dim": "dim white",
+                        "launch": "bold bright_green",
+                        "impact": "bold bright_red",
+                        "flash": "bold bright_yellow",
+                        "creative": "bold bright_cyan"
+                    }
+                    
+                    celebration_text = Text()
+                    style = style_map.get(effect_type, "bold white")
+                    celebration_text.append(frame_icon, style=style)
+                    celebration_text.append(f" {success_message}")
+                    
+                    live.update(celebration_text)
+                    
+                    # Variable speed for dramatic effect
+                    if i < 10:  # Start fast
+                        await asyncio.sleep(0.08)
+                    elif i < 20:  # Medium speed
+                        await asyncio.sleep(0.12)
+                    else:  # Slow down for finale
+                        await asyncio.sleep(0.18)
+            
+            # Final success display with permanent glow
+            final_text = Text()
+            final_text.append("🎉", style="bold bright_yellow")
+            final_text.append(f" {success_message}")
+            self.console.print(final_text)
+            
+        else:
+            # Fallback for non-Rich console
+            for i in range(15):  # Shorter for fallback
+                frame_icon, _ = random.choice(celebration_frames)
+                print(f"\r{frame_icon} {success_message}", end="", flush=True)
+                await asyncio.sleep(0.15)
+            
+            print(f"\r🎉 {success_message}")
+            
+        return f"🎉 {success_message}"
