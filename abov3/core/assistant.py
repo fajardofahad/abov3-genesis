@@ -45,6 +45,9 @@ class Assistant:
                 "timestamp": datetime.now().isoformat()
             })
             
+            # Check if we need to switch agents automatically
+            await self._auto_switch_agent_if_needed(user_input, context)
+            
             # Get model and system prompt from agent
             model = self.agent.model if self.agent else self.default_model
             system_prompt = self._build_system_prompt()
@@ -592,3 +595,109 @@ I'm still here to help with manual guidance and project management!"""
             content,
             description or f"File created directly: {file_path}"
         )
+    
+    async def _auto_switch_agent_if_needed(self, user_input: str, context: Dict[str, Any] = None):
+        """Automatically switch agents based on user request and project context"""
+        # We need access to the agent manager to switch agents
+        # This will be injected by the main application
+        if not hasattr(self, 'agent_manager') or not self.agent_manager:
+            return
+            
+        user_input_lower = user_input.lower()
+        current_agent_name = self.agent.name if self.agent else None
+        
+        # Define agent switching patterns
+        agent_patterns = {
+            'genesis-architect': [
+                'design', 'architecture', 'plan', 'structure', 'organize',
+                'blueprint', 'layout', 'system design', 'schema', 'framework',
+                'how should i structure', 'what architecture', 'design pattern'
+            ],
+            'genesis-builder': [
+                'build', 'implement', 'create', 'write code', 'develop',
+                'generate', 'make', 'construct', 'code this', 'build this',
+                'implement this', 'create a function', 'write a class'
+            ],
+            'genesis-tester': [
+                'test', 'testing', 'unit test', 'debug', 'fix bug',
+                'error', 'issue', 'problem', 'not working', 'broken',
+                'write test', 'test coverage', 'quality assurance'
+            ],
+            'genesis-optimizer': [
+                'optimize', 'performance', 'faster', 'improve', 'refactor',
+                'clean up', 'better', 'efficient', 'speed up', 'memory',
+                'benchmark', 'profiling', 'optimization'
+            ],
+            'genesis-deployer': [
+                'deploy', 'deployment', 'production', 'server', 'hosting',
+                'docker', 'container', 'kubernetes', 'aws', 'cloud',
+                'publish', 'release', 'launch', 'go live'
+            ]
+        }
+        
+        # Find the best matching agent
+        best_agent = None
+        max_matches = 0
+        
+        for agent_name, patterns in agent_patterns.items():
+            matches = sum(1 for pattern in patterns if pattern in user_input_lower)
+            if matches > max_matches:
+                max_matches = matches
+                best_agent = agent_name
+        
+        # Also consider Genesis phase context
+        if context and self.genesis_engine:
+            try:
+                current_phase = await self.genesis_engine.get_current_phase()
+                phase_agent_map = {
+                    'design': 'genesis-architect',
+                    'build': 'genesis-builder', 
+                    'test': 'genesis-tester',
+                    'deploy': 'genesis-deployer'
+                }
+                
+                phase_suggested_agent = phase_agent_map.get(current_phase)
+                if phase_suggested_agent and max_matches < 2:  # Only if no strong pattern match
+                    best_agent = phase_suggested_agent
+                    max_matches = 1
+                    
+            except Exception:
+                pass  # Ignore if Genesis engine is not available
+        
+        # Switch agent if we found a better match and it's different from current
+        if best_agent and best_agent != current_agent_name and max_matches > 0:
+            try:
+                # Get available agents
+                available_agents = self.agent_manager.get_available_agents()
+                agent_names = [agent.name for agent in available_agents]
+                
+                if best_agent in agent_names:
+                    # Switch to the better agent
+                    if await self.agent_manager.switch_agent(best_agent):
+                        self.agent = self.agent_manager.current_agent
+                        
+                        # Show user that we switched agents
+                        from rich.console import Console
+                        console = Console()
+                        
+                        # Get agent descriptions for user context
+                        agent_descriptions = {
+                            'genesis-architect': 'system architecture and design',
+                            'genesis-builder': 'code implementation and development',
+                            'genesis-tester': 'testing and debugging',
+                            'genesis-optimizer': 'performance optimization', 
+                            'genesis-deployer': 'deployment and production'
+                        }
+                        
+                        description = agent_descriptions.get(best_agent, 'specialized assistance')
+                        
+                        # Show switch notification with Genesis theme
+                        console.print(f"\n[dim]🔄 Switched to [cyan]{best_agent}[/cyan] for {description}[/dim]")
+                        
+            except Exception as e:
+                # Silently handle agent switching errors
+                pass
+    
+    def set_agent_manager(self, agent_manager):
+        """Set the agent manager for automatic switching"""
+        self.agent_manager = agent_manager

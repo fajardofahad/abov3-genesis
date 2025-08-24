@@ -537,6 +537,10 @@ class ABOV3Genesis:
             genesis_engine=self.genesis_engine
         )
         
+        # Enable automatic agent switching
+        if self.assistant and self.agent_manager:
+            self.assistant.set_agent_manager(self.agent_manager)
+        
         # Command handlers
         self.agent_handler = AgentCommandHandler(self.agent_manager) if self.agent_manager else None
         
@@ -1134,8 +1138,17 @@ class ABOV3Genesis:
         try:
             console.print(f"\n{self.genz.get_status('thinking')}")
             
+            # Prepare context for Assistant processing
+            context = {
+                'project_path': str(self.project_path),
+                'agent': self.agent_manager.current_agent if self.agent_manager else None,
+                'genesis': await self.genesis_engine.get_genesis_stats() if self.genesis_engine else None,
+                'genesis_engine': self.genesis_engine,
+                'agent_manager': self.agent_manager
+            }
+            
             # Process with assistant
-            response = await self.assistant.process(user_input)
+            response = await self.assistant.process(user_input, context)
             
             # Display response
             console.print(f"\n[bold green]Genesis Response:[/bold green]")
@@ -1207,45 +1220,58 @@ class ABOV3Genesis:
     
     def show_help(self):
         """Show help with Genesis theme"""
-        help_text = """
-╭─────────────────────────────────────────────────────╮
-│         ABOV3 Genesis Commands                      │
-│         From Idea to Built Reality                  │
-├─────────────────────────────────────────────────────┤
-│ Genesis Commands:                                   │
-│ build my idea    - Start Genesis workflow           │
-│ start genesis    - Transform idea to reality        │
-│ continue genesis - Continue workflow                │
-│                                                      │
-│ Project Management:                                 │
-│ /project         - Current project info             │
-│ /project switch  - Switch projects                  │
-│ /project list    - Show all projects                │
-│                                                      │
-│ Agent Management:                                   │
-│ /agents          - Current agent info               │
-│ /agents list     - View all agents                  │
-│ /agents switch   - Switch active agent              │
-│                                                      │
-│ AI Model Management:                                │
-│ /model           - Current model info               │
-│ /model list      - View all models                  │
-│ /model switch    - Switch active model              │
-│                                                      │
-│ Other Commands:                                     │
-│ /tasks           - View task progress               │
-│ /genesis         - Show Genesis status              │
-│ /clear           - Clear screen                     │
-│ /vibe            - Get motivated                    │
-│ /help            - Show this help                   │
-│ /exit            - Save and exit                    │
-│                                                      │
-│ Keyboard Shortcuts:                                 │
-│ Ctrl+C           - Interrupt/Priority               │
-│ Ctrl+D           - Exit                              │
-╰─────────────────────────────────────────────────────╯
-        """
-        console.print(help_text)
+        # Get terminal width for responsive borders
+        width = min(console.size.width - 4, 70)  # Max 70 chars, min leaves padding
+        
+        # Create responsive borders
+        top_border = "╭" + "─" * (width - 2) + "╮"
+        bottom_border = "╰" + "─" * (width - 2) + "╯"
+        separator = "├" + "─" * (width - 2) + "┤"
+        
+        def format_line(text):
+            """Format a line to fit within borders"""
+            if len(text) >= width - 2:
+                return f"│ {text[:width-4]}... │"
+            else:
+                padding = width - len(text) - 3
+                return f"│ {text}{' ' * padding}│"
+        
+        console.print(f"\n{top_border}")
+        console.print(format_line("ABOV3 Genesis Commands"))
+        console.print(format_line("From Idea to Built Reality"))
+        console.print(separator)
+        console.print(format_line("Genesis Commands:"))
+        console.print(format_line("build my idea    - Start Genesis workflow"))
+        console.print(format_line("start genesis    - Transform idea to reality"))
+        console.print(format_line("continue genesis - Continue workflow"))
+        console.print(format_line(""))
+        console.print(format_line("Project Management:"))
+        console.print(format_line("/project         - Current project info"))
+        console.print(format_line("/project switch  - Switch projects"))
+        console.print(format_line("/project list    - Show all projects"))
+        console.print(format_line(""))
+        console.print(format_line("Agent Management:"))
+        console.print(format_line("/agents          - Current agent info"))
+        console.print(format_line("/agents list     - View all agents"))
+        console.print(format_line("/agents switch   - Switch active agent"))
+        console.print(format_line(""))
+        console.print(format_line("AI Model Management:"))
+        console.print(format_line("/model           - Current model info"))
+        console.print(format_line("/model list      - View all models"))
+        console.print(format_line("/model switch    - Switch active model"))
+        console.print(format_line(""))
+        console.print(format_line("Other Commands:"))
+        console.print(format_line("/tasks           - View task progress"))
+        console.print(format_line("/genesis         - Show Genesis status"))
+        console.print(format_line("/clear           - Clear screen"))
+        console.print(format_line("/vibe            - Get motivated"))
+        console.print(format_line("/help            - Show this help"))
+        console.print(format_line("/exit            - Save and exit"))
+        console.print(format_line(""))
+        console.print(format_line("Keyboard Shortcuts:"))
+        console.print(format_line("Ctrl+C           - Interrupt/Priority"))
+        console.print(format_line("Ctrl+D           - Exit"))
+        console.print(f"{bottom_border}\n")
     
     async def cleanup(self):
         """Cleanup with Genesis theme"""
