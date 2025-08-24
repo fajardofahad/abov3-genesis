@@ -79,7 +79,10 @@ class Assistant:
             messages = self._prepare_messages(user_input, system_prompt)
             
             # Check if this is a code generation request
-            if self._is_code_generation_request(user_input):
+            is_code_request = self._is_code_generation_request(user_input)
+            print(f"[DEBUG] Code generation request detected: {is_code_request}")
+            
+            if is_code_request:
                 response_text = await self._handle_code_generation(user_input, messages, model)
             else:
                 # Get AI response
@@ -462,8 +465,11 @@ I'm still here to help with manual guidance and project management!"""
         # Explicit file extensions
         has_file_extension = any(ext in user_input_lower for ext in ['.py', '.js', '.html', '.css', '.java', '.cpp', '.c', '.rs', '.go'])
         
-        return (has_code_keyword and has_file_keyword) or has_file_extension or \
-               any(phrase in user_input_lower for phrase in ['write a', 'create a', 'generate a', 'make a'])
+        has_make_phrase = any(phrase in user_input_lower for phrase in ['write a', 'create a', 'generate a', 'make a'])
+        
+        print(f"[DEBUG] Code detection - has_code_keyword: {has_code_keyword}, has_file_keyword: {has_file_keyword}, has_file_extension: {has_file_extension}, has_make_phrase: {has_make_phrase}")
+        
+        return (has_code_keyword and has_file_keyword) or has_file_extension or has_make_phrase
     
     async def _handle_code_generation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
         """Handle code generation requests with file creation"""
