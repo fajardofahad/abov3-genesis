@@ -943,6 +943,8 @@ class ABOV3Genesis:
             await self.handle_project_command(cmd_parts[1:] if len(cmd_parts) > 1 else [])
         elif cmd.startswith('/agents'):
             await self.handle_agent_command(cmd_parts[1:] if len(cmd_parts) > 1 else [])
+        elif cmd.startswith('/model'):
+            await self.handle_model_command(cmd_parts[1:] if len(cmd_parts) > 1 else [])
         elif cmd == '/tasks':
             if self.task_manager:
                 tasks = self.task_manager.get_active_tasks()
@@ -1005,6 +1007,120 @@ class ABOV3Genesis:
                 console.print("[red]Please provide an agent name[/red]")
         else:
             console.print(f"[red]Unknown agent command: {args[0]}[/red]")
+    
+    async def handle_model_command(self, args: List[str]):
+        """Handle AI model management commands"""
+        if not args:
+            # Show current model info
+            current_model = self.agent_manager.current_agent.model if self.agent_manager and self.agent_manager.current_agent else 'Unknown'
+            console.print(f"\n[cyan]🤖 Current AI Model:[/cyan] {current_model}")
+            console.print("[dim]Use '/model switch' to change models[/dim]")
+            return
+        
+        subcommand = args[0].lower()
+        
+        if subcommand == 'switch' or subcommand == 'select':
+            await self.switch_ai_model()
+        elif subcommand == 'list':
+            await self.list_available_models()
+        elif subcommand == 'help':
+            self.show_model_help()
+        else:
+            console.print(f"[red]Unknown model command: {subcommand}[/red]")
+            console.print("[dim]Use '/model help' for available commands[/dim]")
+    
+    async def switch_ai_model(self):
+        """Interactive AI model switching"""
+        from abov3.core.ollama_client import OllamaClient
+        
+        try:
+            # Show animated thinking while loading models
+            await self.animated_status.animate_thinking(1.5, "Loading available AI models...")
+            
+            ollama = OllamaClient()
+            
+            if not await ollama.is_available():
+                console.print("[red]❌ Ollama is not available. Please start Ollama server first.[/red]")
+                console.print("[dim]Run: ollama serve[/dim]")
+                return
+            
+            models = await ollama.list_models()
+            
+            if not models:
+                console.print("[red]❌ No AI models found.[/red]")
+                console.print("[dim]Pull a model: ollama pull llama3[/dim]")
+                await ollama.close()
+                return
+            
+            # Show current model
+            current_model = self.agent_manager.current_agent.model if self.agent_manager and self.agent_manager.current_agent else 'Unknown'
+            console.print(f"\n[cyan]🤖 Current Model:[/cyan] {current_model}")
+            
+            # Display model selection with animated interface
+            await self.animated_status.animate_building(1.0, "Preparing model selection interface...")
+            await self.show_model_selection(models)
+            await ollama.close()
+            
+        except Exception as e:
+            console.print(f"[red]❌ Error switching models: {e}[/red]")
+    
+    async def list_available_models(self):
+        """List all available AI models"""
+        from abov3.core.ollama_client import OllamaClient
+        
+        try:
+            ollama = OllamaClient()
+            
+            if not await ollama.is_available():
+                console.print("[red]❌ Ollama is not available[/red]")
+                return
+            
+            models = await ollama.list_models()
+            
+            if not models:
+                console.print("[yellow]⚠️ No models available[/yellow]")
+                await ollama.close()
+                return
+            
+            console.print(f"\n[cyan]🤖 Available AI Models ({len(models)} total):[/cyan]")
+            
+            current_model = self.agent_manager.current_agent.model if self.agent_manager and self.agent_manager.current_agent else None
+            
+            for i, model in enumerate(models, 1):
+                name = model.get('name', 'Unknown')
+                size = self.format_model_size(model.get('size', 0))
+                modified = self.format_modified_date(model.get('modified_at', ''))
+                
+                # Highlight current model
+                if name == current_model:
+                    console.print(f"  {i}. [bold green]✅ {name}[/bold green] ({size}) - [dim]{modified}[/dim] [green]← Current[/green]")
+                else:
+                    console.print(f"  {i}. {name} ({size}) - [dim]{modified}[/dim]")
+            
+            console.print(f"\n[dim]Use '/model switch' to change the active model[/dim]")
+            await ollama.close()
+            
+        except Exception as e:
+            console.print(f"[red]❌ Error listing models: {e}[/red]")
+    
+    def show_model_help(self):
+        """Show model command help"""
+        help_text = """
+╭─────────────────────────────────────────────────────╮
+│         AI Model Management Commands                │
+├─────────────────────────────────────────────────────┤
+│ /model              - Show current model info       │
+│ /model switch       - Switch to different model     │
+│ /model select       - Same as switch                │  
+│ /model list         - List all available models     │
+│ /model help         - Show this help                │
+├─────────────────────────────────────────────────────┤
+│ Note: Requires Ollama server to be running          │
+│ Start with: ollama serve                             │
+│ Install models: ollama pull <model-name>            │
+╰─────────────────────────────────────────────────────╯
+        """
+        console.print(help_text)
     
     async def process_input(self, user_input: str):
         """Process user input with Genesis capabilities"""
@@ -1110,6 +1226,11 @@ class ABOV3Genesis:
 │ /agents          - Current agent info               │
 │ /agents list     - View all agents                  │
 │ /agents switch   - Switch active agent              │
+│                                                      │
+│ AI Model Management:                                │
+│ /model           - Current model info               │
+│ /model list      - View all models                  │
+│ /model switch    - Switch active model              │
 │                                                      │
 │ Other Commands:                                     │
 │ /tasks           - View task progress               │
