@@ -185,12 +185,8 @@ class ABOV3Genesis:
 ╚══════════════════════════════════════════════════════╝
         """
         
-        panel = Panel(
-            Text(banner_text, style="cyan", justify="center"),
-            border_style="bright_blue",
-            padding=(1, 2)
-        )
-        console.print(panel)
+        # Display the banner directly without Panel wrapper to avoid double borders
+        console.print(Text(banner_text, style="cyan", justify="center"))
         
         # Random Genesis motivation
         motivations = [
