@@ -46,12 +46,16 @@ class Assistant:
                 if 'project_path' in context and not self.code_generator:
                     from pathlib import Path
                     self.code_generator = CodeGenerator(Path(context['project_path']))
+                    print(f"[DEBUG] Initialized CodeGenerator with path: {context['project_path']}")
                 elif 'project_path' in context and self.code_generator:
                     # Update code generator if project path changed
                     from pathlib import Path
                     new_path = Path(context['project_path'])
                     if new_path != self.code_generator.project_path:
                         self.code_generator = CodeGenerator(new_path)
+                        print(f"[DEBUG] Updated CodeGenerator with new path: {context['project_path']}")
+                else:
+                    print(f"[DEBUG] Context: {context}, Code generator exists: {self.code_generator is not None}")
             
             # Add user message to history
             self.conversation_history.append({
@@ -464,7 +468,9 @@ I'm still here to help with manual guidance and project management!"""
     async def _handle_code_generation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
         """Handle code generation requests with file creation"""
         if not self.code_generator:
-            return "❌ Code generation is not available. Please ensure you're working within a project directory."
+            # Debug information
+            project_path = self.project_context.get('project_path', 'Not set')
+            return f"❌ Code generation is not available. Debug info - Project path: {project_path}, Code generator: {self.code_generator is not None}"
         
         try:
             # Get AI response for the code
