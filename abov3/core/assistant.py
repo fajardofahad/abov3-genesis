@@ -38,6 +38,21 @@ class Assistant:
     async def process(self, user_input: str, context: Dict[str, Any] = None) -> str:
         """Process user input and return response"""
         try:
+            # Update context if provided
+            if context:
+                self.project_context.update(context)
+                
+                # Initialize or update code generator if we have project path
+                if 'project_path' in context and not self.code_generator:
+                    from pathlib import Path
+                    self.code_generator = CodeGenerator(Path(context['project_path']))
+                elif 'project_path' in context and self.code_generator:
+                    # Update code generator if project path changed
+                    from pathlib import Path
+                    new_path = Path(context['project_path'])
+                    if new_path != self.code_generator.project_path:
+                        self.code_generator = CodeGenerator(new_path)
+            
             # Add user message to history
             self.conversation_history.append({
                 "role": "user",
