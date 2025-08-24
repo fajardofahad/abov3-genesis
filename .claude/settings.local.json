@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(chmod:*)",
+      "Bash(abov3.bat --version)",
+      "Bash(cmd /c:*)",
+      "Bash(./abov3.bat --version)",
+      "Bash(git init:*)",
+      "Bash(cmd //c:*)",
+      "Bash(sed:*)",
+      "Bash(rm:*)",
+      "Bash(timeout 10 python -m abov3.cli:*)",
+      "Bash(git rm:*)",
+      "Bash(git push:*)",
+      "Bash(timeout 15 python abov3_project.py test_project)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(timeout 20 python -m abov3.cli)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(timeout 15 python -m abov3.cli)",
+      "Bash(timeout:*)",
+      "Bash(ulimit:*)",
+      "Bash(ollama list:*)",
+      "Read(/C:\\Users\\fajar\\.claude/**)",
+      "Bash(node:*)",
+      "Bash(npm --version)",
+      "Bash(pip --version)",
+      "Read(/C:\\Users\\fajar/**)",
+      "Read(/C:\\Users\\fajar/**)",
+      "Bash(git remote add:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\Users\\fajar\\Documents\\ABOV3\\abov3-Genesis"
+    ]
+  }
+}
