@@ -550,6 +550,9 @@ I'm still here to help with manual guidance and project management!"""
             code_blocks = self._extract_code_blocks(ai_response)
             file_paths = self._extract_file_paths(user_input)
             
+            print(f"[DEBUG] Found {len(code_blocks)} code blocks")
+            print(f"[DEBUG] Found {len(file_paths)} file paths")
+            
             # If we found code blocks, offer to create files
             if code_blocks:
                 created_files = []
@@ -698,32 +701,56 @@ I'm still here to help with manual guidance and project management!"""
                         base_filename = 'generated_file'
                         user_input_words = user_input.lower().split()
                         
-                        # Look for common file name patterns
-                        if 'hello' in user_input_words and 'world' in user_input_words:
-                            base_filename = 'hello_world'
-                        elif 'index' in user_input_words:
-                            base_filename = 'index'
-                        elif 'main' in user_input_words:
-                            base_filename = 'main'
-                        elif 'app' in user_input_words:
-                            base_filename = 'app'
-                        elif 'server' in user_input_words:
-                            base_filename = 'server'
-                        elif 'client' in user_input_words:
-                            base_filename = 'client'
-                        elif 'test' in user_input_words:
-                            base_filename = 'test'
-                        elif 'example' in user_input_words:
-                            base_filename = 'example'
+                        # Check if this is an update request (look for existing files)
+                        is_update_request = any(word in user_input.lower() for word in ['update', 'modify', 'change', 'edit'])
                         
-                        file_path = f"{base_filename}{extension}"
+                        if is_update_request:
+                            # Look for existing HTML files in the project
+                            import os
+                            project_files = []
+                            try:
+                                for root, dirs, files in os.walk(self.code_generator.project_path):
+                                    for file in files:
+                                        if file.endswith(('.html', '.htm')):
+                                            project_files.append(file)
+                            except:
+                                pass
+                            
+                            if project_files:
+                                # Use the first HTML file found for updates
+                                file_path = project_files[0]
+                                print(f"[DEBUG] Update request - using existing file: {file_path}")
+                            else:
+                                file_path = 'index.html'  # Create new if none exists
+                        else:
+                            # Look for common file name patterns for new files
+                            if 'hello' in user_input_words and 'world' in user_input_words:
+                                base_filename = 'hello_world'
+                            elif 'index' in user_input_words:
+                                base_filename = 'index'
+                            elif 'main' in user_input_words:
+                                base_filename = 'main'
+                            elif 'app' in user_input_words:
+                                base_filename = 'app'
+                            elif 'server' in user_input_words:
+                                base_filename = 'server'
+                            elif 'client' in user_input_words:
+                                base_filename = 'client'
+                            elif 'test' in user_input_words:
+                                base_filename = 'test'
+                            elif 'example' in user_input_words:
+                                base_filename = 'example'
+                            
+                            file_path = f"{base_filename}{extension}"
                     
-                    # Create the file
+                    # Create the file (allow overwrite for update requests)
+                    allow_overwrite = any(word in user_input.lower() for word in ['update', 'modify', 'change', 'edit'])
+                    
                     result = await self.code_generator.create_file(
                         file_path,
                         code_block['code'],
                         f"Generated from request: {user_input[:50]}...",
-                        overwrite=False
+                        overwrite=allow_overwrite
                     )
                     
                     if result['success']:
@@ -751,9 +778,13 @@ I'm still here to help with manual guidance and project management!"""
         """Extract code blocks from markdown-formatted text"""
         import re
         
+        print(f"[DEBUG] Extracting code blocks from text length: {len(text)}")
+        
         # Pattern to match code blocks with language specification
         pattern = r'```(\w+)?\n(.*?)```'
         matches = re.findall(pattern, text, re.DOTALL)
+        
+        print(f"[DEBUG] Found {len(matches)} markdown code blocks")
         
         code_blocks = []
         for language, code in matches:
@@ -761,6 +792,7 @@ I'm still here to help with manual guidance and project management!"""
                 'language': language or 'text',
                 'code': code.strip()
             })
+            print(f"[DEBUG] Code block: language='{language}', code_length={len(code.strip())}")
         
         # Also look for inline code that might be complete files
         if not code_blocks:
