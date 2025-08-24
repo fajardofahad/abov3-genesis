@@ -464,10 +464,14 @@ class ABOV3Genesis:
             if change_model.lower() in ['y', 'yes']:
                 await self.show_model_selection(models)
                 
-            await ollama.close()
-            
         except Exception as e:
             console.print(f"[red]Error accessing Ollama models: {e}[/red]")
+        finally:
+            # Always close the ollama connection
+            try:
+                await ollama.close()
+            except:
+                pass  # Ignore cleanup errors
     
     async def show_model_selection(self, models):
         """Display model selection interface"""
@@ -502,7 +506,10 @@ class ABOV3Genesis:
                     if self.agent_manager and self.agent_manager.current_agent:
                         old_model = self.agent_manager.current_agent.model
                         self.agent_manager.current_agent.model = model_name
-                        await self.agent_manager.save_agent(self.agent_manager.current_agent)
+                        
+                        # Save the updated agent (using the private method)
+                        self.agent_manager._save_agent(self.agent_manager.current_agent)
+                        self.agent_manager._save_current_agent()
                         
                         console.print(f"[green]✅ Model changed from {old_model} to {model_name}[/green]")
                     
@@ -1114,10 +1121,15 @@ class ABOV3Genesis:
             # Display model selection with animated interface
             await self.animated_status.animate_building(1.0, "Preparing model selection interface...")
             await self.show_model_selection(models)
-            await ollama.close()
             
         except Exception as e:
             console.print(f"[red]❌ Error switching models: {e}[/red]")
+        finally:
+            # Always close the ollama connection
+            try:
+                await ollama.close()
+            except:
+                pass  # Ignore cleanup errors
     
     async def list_available_models(self):
         """List all available AI models"""
@@ -1153,10 +1165,15 @@ class ABOV3Genesis:
                     console.print(f"  {i}. {name} ({size}) - [dim]{modified}[/dim]")
             
             console.print(f"\n[dim]Use '/model switch' to change the active model[/dim]")
-            await ollama.close()
             
         except Exception as e:
             console.print(f"[red]❌ Error listing models: {e}[/red]")
+        finally:
+            # Always close the ollama connection
+            try:
+                await ollama.close()
+            except:
+                pass  # Ignore cleanup errors
     
     def show_model_help(self):
         """Show model command help"""
