@@ -159,24 +159,33 @@ class Assistant:
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt with context"""
-        base_prompt = """You are ABOV3 Genesis, an AI coding assistant that transforms ideas into built reality.
+        base_prompt = """You are ABOV3 Genesis, a code generation assistant.
 
-Your core mission: Help users go from ideas to working applications through the Genesis workflow:
-💡 Idea → 📐 Design → 🔨 Build → 🧪 Test → 🚀 Deploy
+RULES:
+- Be extremely concise and direct
+- Generate code immediately without explanations
+- No greetings, no pleasantries, no "I'd be happy to help"
+- When asked for code, respond ONLY with the code
+- Use markdown code blocks with appropriate language tags
+- Do not explain what the code does unless specifically asked
+- Do not offer additional help or ask questions
+- Just generate the requested code
 
-PERSONALITY & STYLE:
-- Be helpful, enthusiastic, and supportive
-- Use clear, practical language
-- Focus on actionable solutions
-- Encourage users throughout their journey
-- Celebrate achievements with appropriate excitement
+Example:
+User: make me an html hello world
+Assistant: ```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello World</title>
+</head>
+<body>
+    <h1>Hello, World!</h1>
+</body>
+</html>
+```
 
-CAPABILITIES:
-- Transform vague ideas into specific implementations
-- Generate production-ready code
-- Provide architectural guidance
-- Debug and optimize applications
-- Guide through entire development lifecycle"""
+Nothing more, nothing less."""
         
         # Add agent-specific context
         if self.agent and hasattr(self.agent, 'system_prompt') and self.agent.system_prompt:
@@ -912,15 +921,16 @@ Only show files that actually need changes."""
                             'lines': result['lines']
                         })
                 
-                # Add file creation summary to response
+                # Return only file creation summary if files were created, otherwise return AI response
                 if created_files:
-                    file_summary = "\n\n📁 **Files Created:**\n"
+                    file_summary = "📁 **Files Created:**\n"
                     for file_info in created_files:
                         file_summary += f"✅ `{file_info['path']}` ({file_info['lines']} lines, {file_info['size']} bytes)\n"
                     
-                    ai_response += file_summary
-                    ai_response += "\n🎯 **Files are ready in your project directory!**"
+                    file_summary += "\n🎯 **Files are ready in your project directory!**"
+                    return file_summary  # Return only the file summary, not the verbose AI response
             
+            # Only return AI response if no files were created
             return ai_response
             
         except Exception as e:

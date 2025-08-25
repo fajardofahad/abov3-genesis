@@ -744,10 +744,10 @@ class EnhancedAIAssistant:
         
         # Simple template-based responses
         fallback_responses = {
-            "code_generation": "I'd be happy to help you with code generation. However, I'm currently experiencing technical difficulties with my AI models. Please try again in a moment, or consider using a simpler request.",
-            "debugging": "I can help with debugging, but I'm currently having issues accessing my analysis tools. Please try again shortly.",
-            "explanation": "I'd love to explain that concept, but I'm experiencing some technical issues. Please try your request again in a moment.",
-            "conversation": "I'm here to help! However, I'm experiencing some technical difficulties right now. Please try again in a moment."
+            "code_generation": "AI models unavailable. Check Ollama status.",
+            "debugging": "Debugging tools unavailable. Check system status.",
+            "explanation": "Cannot process request. Try again.",
+            "conversation": "System unavailable. Try again."
         }
         
         response = fallback_responses.get(task_type, fallback_responses["conversation"])
