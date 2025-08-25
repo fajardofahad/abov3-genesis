@@ -28,6 +28,8 @@ ABOV3 Genesis has been transformed into a **Claude/Replit-level coding assistant
 
 ## 🔧 Quick Start Integration
 
+> **📖 New to ABOV3 Genesis? Start with our [User Guide](docs/USER_GUIDE.md) for a complete walkthrough!**
+
 ### Step 1: Install Dependencies
 ```bash
 cd C:\Users\fajar\Documents\ABOV3\abov3-Genesis\abov3-genesis-v1.0.0
@@ -225,12 +227,48 @@ ABOV3 Genesis now offers:
 
 You now have a coding assistant that rivals Claude, GitHub Copilot, and Replit, but runs entirely on your local infrastructure with complete privacy and customization!
 
+## 📚 Complete Documentation
+
+For comprehensive guidance on using ABOV3 Genesis:
+
+### Core Documentation
+- **[User Guide](docs/USER_GUIDE.md)** - Complete user manual and tutorials
+- **[Installation Guide](docs/INSTALLATION_GUIDE.md)** - Platform-specific installation instructions
+- **[API Documentation](docs/API_DOCUMENTATION.md)** - Complete API reference
+- **[Examples & Tutorials](docs/EXAMPLES_AND_TUTORIALS.md)** - Practical examples for all use cases
+
+### Configuration & Optimization
+- **[Ollama Configuration](docs/OLLAMA_CONFIGURATION.md)** - Model setup and optimization
+- **[Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md)** - Advanced performance tuning
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Solutions for common issues
+
+### Development
+- **[Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute to the project
+
 ## Support
 
 For issues or questions:
-- GitHub: https://github.com/fajardofahad/abov3-genesis
-- Documentation: See `/docs` folder
-- Tests: Run `python run_tests.py`
+- **GitHub Issues**: https://github.com/fajardofahad/abov3-genesis/issues
+- **Documentation**: Check the comprehensive guides in `/docs` folder
+- **Tests**: Run `python run_tests.py` for system validation
+- **Community**: Join our Discord for real-time support
+
+## Quick Navigation
+
+### New Users
+1. Start with [Installation Guide](docs/INSTALLATION_GUIDE.md)
+2. Follow [User Guide](docs/USER_GUIDE.md) for first project
+3. Explore [Examples & Tutorials](docs/EXAMPLES_AND_TUTORIALS.md)
+
+### Developers
+1. Read [API Documentation](docs/API_DOCUMENTATION.md)
+2. Check [Contributing Guide](docs/CONTRIBUTING.md)
+3. Run tests and explore codebase
+
+### System Administrators
+1. Review [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md)
+2. Configure using [Ollama Configuration](docs/OLLAMA_CONFIGURATION.md)
+3. Keep [Troubleshooting Guide](docs/TROUBLESHOOTING.md) handy
 
 ---
 *Built with ❤️ using Enterprise Claude Agents*

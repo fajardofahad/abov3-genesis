@@ -405,6 +405,13 @@ def validate_installation():
 
 
 if __name__ == "__main__":
+    # Set UTF-8 encoding for Windows console
+    import sys
+    import io
+    if sys.platform == "win32":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    
     print("""
 ╔══════════════════════════════════════════════════════════════╗
 ║           ABOV3 GENESIS - QUALITY ASSURANCE SUITE           ║

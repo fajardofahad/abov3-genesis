@@ -269,7 +269,7 @@ class CodeDebugger:
             func_name = func.__name__
             
             # Log entry
-            self.logger.debug(f"→ Entering {func_name}")
+            self.logger.debug(f"-> Entering {func_name}")
             self._log_arguments(func_name, args, kwargs)
             
             # Record in trace
@@ -286,7 +286,7 @@ class CodeDebugger:
                 result = func(*args, **kwargs)
                 
                 # Log exit
-                self.logger.debug(f"← Exiting {func_name} with result: {str(result)[:100]}")
+                self.logger.debug(f"<- Exiting {func_name} with result: {str(result)[:100]}")
                 trace_entry['result'] = str(result)[:100]
                 trace_entry['success'] = True
                 
@@ -311,7 +311,7 @@ class CodeDebugger:
             func_name = func.__name__
             
             # Log entry
-            self.logger.debug(f"→ Entering async {func_name}")
+            self.logger.debug(f"-> Entering async {func_name}")
             self._log_arguments(func_name, args, kwargs)
             
             # Record in trace
@@ -328,7 +328,7 @@ class CodeDebugger:
                 result = await func(*args, **kwargs)
                 
                 # Log exit
-                self.logger.debug(f"← Exiting async {func_name} with result: {str(result)[:100]}")
+                self.logger.debug(f"<- Exiting async {func_name} with result: {str(result)[:100]}")
                 trace_entry['result'] = str(result)[:100]
                 trace_entry['success'] = True
                 

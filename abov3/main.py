@@ -9,6 +9,7 @@ import signal
 import random
 import sys
 import os
+import json
 from pathlib import Path
 from typing import Optional, Dict, List
 from datetime import datetime
@@ -41,6 +42,8 @@ from abov3.permissions.manager import PermissionManager
 from abov3.dependencies.detector import DependencyDetector
 from abov3.ui.display import UIManager
 from abov3.ui.genz import GenZStatus, AnimatedStatus
+from abov3.security.integration import SecurityIntegration, initialize_abov3_security
+from abov3.security.core import SecurityLevel
 
 console = Console()
 
@@ -73,6 +76,9 @@ class ABOV3Genesis:
         self.dependency_detector = None
         self.assistant = None
         self.genesis_flow = None
+        
+        # Security integration
+        self.security_integration = None
         
         # Processing state
         self.processing = False
@@ -557,6 +563,18 @@ class ABOV3Genesis:
         abov3_dir = self.project_path / '.abov3'
         abov3_dir.mkdir(exist_ok=True)
         
+        # Initialize security framework first
+        console.print("[dim]🔒 Initializing Enterprise Security Framework...[/dim]")
+        try:
+            self.security_integration = await initialize_abov3_security(
+                self.project_path, 
+                SecurityLevel.HIGH
+            )
+            console.print("[green]✅ Security Framework initialized successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]⚠️ Security Framework initialization failed: {e}[/red]")
+            console.print("[yellow]⚠️ Continuing without security framework (NOT RECOMMENDED)[/yellow]")
+        
         # Create subdirectories if they don't exist
         for subdir in ['agents', 'sessions', 'history', 'genesis_flow', 'tasks', 'permissions', 'dependencies', 'context']:
             (abov3_dir / subdir).mkdir(exist_ok=True)
@@ -1017,6 +1035,8 @@ class ABOV3Genesis:
                     console.print(f"  {i}. {task}")
             else:
                 console.print("[yellow]Task manager not available[/yellow]")
+        elif cmd.startswith('/security'):
+            await self.handle_security_command(cmd_parts[1:] if len(cmd_parts) > 1 else [])
         else:
             console.print(f"[red]Unknown command: {command}[/red]")
             console.print("[dim]Type '/help' for available commands[/dim]")
@@ -1071,6 +1091,68 @@ class ABOV3Genesis:
                 console.print("[red]Please provide an agent name[/red]")
         else:
             console.print(f"[red]Unknown agent command: {args[0]}[/red]")
+    
+    async def handle_security_command(self, args: List[str]):
+        """Handle security management commands"""
+        if not self.security_integration:
+            console.print("[red]🔒 Security framework not initialized[/red]")
+            return
+        
+        if not args:
+            # Show security status
+            status = await self.security_integration.get_security_status()
+            console.print(f"\n[cyan]🔒 Security Status:[/cyan]")
+            console.print(f"Status: [green]{status['overall_status']}[/green]")
+            console.print(f"Active Sessions: {status.get('active_sessions', 0)}")
+            console.print(f"Blocked IPs: {status.get('blocked_ips', 0)}")
+            
+        elif args[0] == 'scan':
+            scan_type = args[1] if len(args) > 1 else 'full'
+            console.print(f"[cyan]🔍 Running {scan_type} vulnerability scan...[/cyan]")
+            
+            result = await self.security_integration.scan_for_vulnerabilities(scan_type)
+            if result.get('success'):
+                scan_results = result['results']
+                summary = scan_results['summary']
+                console.print(f"\n[green]✅ Scan completed[/green]")
+                console.print(f"Files scanned: {summary['total_files']}")
+                console.print(f"Vulnerabilities found: {summary['total_vulnerabilities']}")
+                console.print(f"Critical: {summary['by_severity']['critical']}")
+                console.print(f"High: {summary['by_severity']['high']}")
+                console.print(f"Medium: {summary['by_severity']['medium']}")
+                console.print(f"Low: {summary['by_severity']['low']}")
+            else:
+                console.print(f"[red]❌ Scan failed: {result.get('error')}[/red]")
+                
+        elif args[0] == 'report':
+            days = int(args[1]) if len(args) > 1 and args[1].isdigit() else 7
+            console.print(f"[cyan]📊 Generating security report for last {days} days...[/cyan]")
+            
+            report = await self.security_integration.generate_security_report(days)
+            if 'error' not in report:
+                summary = report['summary']
+                console.print(f"\n[green]📋 Security Report ({days} days)[/green]")
+                console.print(f"Total events: {summary['total_events']}")
+                console.print(f"Security events: {summary['security_events']}")
+                console.print(f"Failed logins: {summary['failed_authentications']}")
+                console.print(f"Successful logins: {summary['successful_authentications']}")
+                console.print(f"Permission denials: {summary['permission_denials']}")
+                
+                if report['recommendations']:
+                    console.print(f"\n[yellow]🔍 Recommendations:[/yellow]")
+                    for rec in report['recommendations'][:3]:
+                        console.print(f"  • {rec}")
+            else:
+                console.print(f"[red]❌ Report generation failed: {report['error']}[/red]")
+                
+        elif args[0] == 'status':
+            status = await self.security_integration.get_security_status()
+            console.print(f"\n[cyan]🔒 Detailed Security Status:[/cyan]")
+            console.print(json.dumps(status, indent=2))
+            
+        else:
+            console.print(f"[red]Unknown security command: {args[0]}[/red]")
+            console.print("[dim]Available: status, scan [type], report [days][/dim]")
     
     async def handle_model_command(self, args: List[str]):
         """Handle AI model management commands"""
@@ -1199,6 +1281,19 @@ class ABOV3Genesis:
         if not self.assistant:
             console.print("[red]Assistant not available. Please check initialization.[/red]")
             return
+        
+        # Security validation if available
+        if self.security_integration:
+            validation_result = await self.security_integration.secure_user_input(
+                user_input, 'text', {'client_id': 'main_interface', 'authenticated': True}
+            )
+            
+            if not validation_result.get('valid', True):
+                console.print(f"[red]🔒 Security: Input blocked - {validation_result.get('reason', 'Security violation')}[/red]")
+                return
+            
+            # Use sanitized input if available
+            user_input = validation_result.get('processed_request', {}).get('input', user_input)
         
         self.processing = True
         self.current_task = "Processing your request"
@@ -1351,6 +1446,11 @@ class ABOV3Genesis:
         console.print(format_line("/model           - Current model info"))
         console.print(format_line("/model list      - View all models"))
         console.print(format_line("/model switch    - Switch active model"))
+        console.print(format_line(""))
+        console.print(format_line("Security Commands:"))
+        console.print(format_line("/security        - Security status"))
+        console.print(format_line("/security scan   - Run vulnerability scan"))
+        console.print(format_line("/security report - Generate security report"))
         console.print(format_line(""))
         console.print(format_line("Other Commands:"))
         console.print(format_line("/tasks           - View task progress"))

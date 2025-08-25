@@ -511,7 +511,7 @@ class InputValidator:
                 result['sanitized_input'] = re.sub(pattern, '[REMOVED]', input_text, flags=re.IGNORECASE)
         
         # Check for potential code injection
-        if any(char in input_text for char in ['<script', '<?php', '<%', '${', '#{', '{{'):
+        if any(char in input_text for char in ['<script', '<?php', '<%', '${', '#{', '{{']):
             result['warnings'].append("Potential code injection attempt detected")
         
         # Sanitize special characters for file operations

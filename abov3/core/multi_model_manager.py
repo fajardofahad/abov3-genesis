@@ -330,12 +330,18 @@ class MultiModelManager:
             # Get list of installed models
             installed_models = await base_client.list_models()
             
-            for model_info in installed_models.get('models', []):
+            # Handle case where list_models returns list directly or dict with 'models' key
+            if isinstance(installed_models, list):
+                models_list = installed_models
+            else:
+                models_list = installed_models.get('models', [])
+            
+            for model_info in models_list:
                 model_name = model_info['name']
                 
                 if model_name in self.available_models:
                     # Create client for this model
-                    client = OllamaClient(model_name)
+                    client = OllamaClient()
                     self.model_clients[model_name] = client
                     self.request_queues[model_name] = asyncio.Queue(maxsize=10)
                     
@@ -357,7 +363,7 @@ class MultiModelManager:
                         status=ModelStatus.AVAILABLE
                     )
                     
-                    client = OllamaClient(model_name)
+                    client = OllamaClient()
                     self.model_clients[model_name] = client
                     self.request_queues[model_name] = asyncio.Queue(maxsize=10)
                     self.performance_metrics[model_name] = ModelPerformanceMetrics(model_name)
@@ -367,15 +373,40 @@ class MultiModelManager:
         
         except Exception as e:
             logger.error(f"Failed to detect available models: {e}")
-            
-            # Fallback: try to use codellama as default
-            default_model = "codellama:latest"
+        finally:
+            # Clean up base client
             try:
-                client = OllamaClient(default_model)
-                await client.test_connection()
-                self.model_clients[default_model] = client
-                self.request_queues[default_model] = asyncio.Queue(maxsize=10)
-                logger.info(f"Using {default_model} as fallback model")
+                await base_client.close()
+            except:
+                pass
+            
+            # Fallback: try to use any available model as default
+            try:
+                fallback_client = OllamaClient()
+                if await fallback_client.is_available():
+                    await fallback_client.connect()
+                    models_list = await fallback_client.list_models()
+                    if models_list:
+                        # Use first available model as fallback
+                        first_model = models_list[0]
+                        fallback_name = first_model.get('name', 'unknown')
+                        
+                        self.model_clients[fallback_name] = fallback_client
+                        self.request_queues[fallback_name] = asyncio.Queue(maxsize=10)
+                        self.available_models[fallback_name] = ModelInfo(
+                            name=fallback_name,
+                            full_name=fallback_name,
+                            size_gb=first_model.get('size', 0) / (1024**3),
+                            context_window=8192,
+                            capabilities=[ModelCapability.CODE_GENERATION],
+                            status=ModelStatus.AVAILABLE
+                        )
+                        logger.info(f"Using {fallback_name} as fallback model")
+                    else:
+                        await fallback_client.close()
+                        logger.warning("No models available - system will use fallback responses")
+                else:
+                    logger.warning("Ollama server not available - system will use fallback responses")
             except Exception as fallback_error:
                 logger.error(f"Failed to initialize fallback model: {fallback_error}")
     
@@ -384,19 +415,26 @@ class MultiModelManager:
         task_type: str,
         user_request: str,
         context_info: Dict[str, Any] = None,
-        constraints: Dict[str, Any] = None
+        constraints: Dict[str, Any] = None,
+        performance_priority: str = "balanced"  # "speed", "quality", "balanced"
     ) -> Tuple[str, float]:
         """
-        Select the best model for a given task using intelligent selection algorithm
+        Select the best model for a given task using advanced intelligent selection algorithm
         Returns: (model_name, confidence_score)
         """
         start_time = time.time()
         context_info = context_info or {}
         constraints = constraints or {}
         
-        # Get task capability mapping
+        # Advanced task classification
+        task_complexity = self._analyze_task_complexity(user_request, context_info)
+        task_domain = self._identify_task_domain(user_request, context_info)
+        urgency_level = self._assess_urgency(constraints)
+        
+        # Enhanced task capability mapping with sub-categories
         task_capability_map = {
             "code_generation": ModelCapability.CODE_GENERATION,
+            "code_completion": ModelCapability.CODE_GENERATION,
             "code_review": ModelCapability.CODE_REVIEW,
             "debugging": ModelCapability.DEBUGGING,
             "explanation": ModelCapability.EXPLANATION,
@@ -404,20 +442,24 @@ class MultiModelManager:
             "testing": ModelCapability.TESTING,
             "documentation": ModelCapability.DOCUMENTATION,
             "conversation": ModelCapability.CONVERSATION,
-            "optimization": ModelCapability.OPTIMIZATION
+            "optimization": ModelCapability.OPTIMIZATION,
+            "refactoring": ModelCapability.OPTIMIZATION,
+            "api_design": ModelCapability.ARCHITECTURE,
+            "performance_analysis": ModelCapability.OPTIMIZATION
         }
         
         required_capability = task_capability_map.get(task_type, ModelCapability.CODE_GENERATION)
         
-        # Score all available models
+        # Score all available models with advanced algorithms
         model_scores = {}
         for model_name, model_info in self.available_models.items():
             if model_name not in self.model_clients:
                 continue  # Model not available
             
-            score = await self._calculate_model_score(
+            score = await self._calculate_advanced_model_score(
                 model_name, model_info, required_capability,
-                user_request, context_info, constraints
+                user_request, context_info, constraints,
+                task_complexity, task_domain, urgency_level, performance_priority
             )
             
             if score > 0:
@@ -442,34 +484,54 @@ class MultiModelManager:
         logger.debug(f"Selected {best_model[0]} with score {best_model[1]:.3f} for {task_type}")
         return best_model[0], best_model[1]
     
-    async def _calculate_model_score(
+    async def _calculate_advanced_model_score(
         self,
         model_name: str,
         model_info: ModelInfo,
         required_capability: ModelCapability,
         user_request: str,
         context_info: Dict[str, Any],
-        constraints: Dict[str, Any]
+        constraints: Dict[str, Any],
+        task_complexity: str,
+        task_domain: str,
+        urgency_level: str,
+        performance_priority: str
     ) -> float:
-        """Calculate suitability score for a model"""
+        """Calculate advanced suitability score for a model"""
         
         score = 0.0
         
-        # Base capability score
+        # Base capability score (higher weight)
         if required_capability in model_info.capabilities:
-            score += 30.0
+            score += 40.0  # Increased base score
         else:
-            # Not suitable if doesn't have required capability
-            return 0.0
+            # Check for related capabilities
+            related_capabilities = self._get_related_capabilities(required_capability)
+            capability_match = any(cap in model_info.capabilities for cap in related_capabilities)
+            if capability_match:
+                score += 20.0  # Partial credit for related capabilities
+            else:
+                return 0.0  # Not suitable if no relevant capability
         
-        # Performance metrics score (40% weight)
+        # Enhanced performance metrics score (35% weight)
         metrics = self.performance_metrics.get(model_name)
         if metrics:
-            score += metrics.health_score * 20.0
-            score += min(metrics.success_rate_24h, 1.0) * 20.0
+            # Health and success rate with improved weighting
+            score += metrics.health_score * 18.0
+            score += min(metrics.success_rate_24h, 1.0) * 17.0
             
-            # Load balancing - prefer less loaded models
-            load_penalty = metrics.current_load * 10.0
+            # Advanced load balancing based on priority
+            if performance_priority == "speed":
+                load_penalty = metrics.current_load * 15.0  # Heavily penalize load
+                response_time_bonus = max(0, 10.0 - (metrics.avg_response_time_ms / 1000))  # Bonus for fast models
+                score += response_time_bonus
+            elif performance_priority == "quality":
+                load_penalty = metrics.current_load * 5.0  # Less concerned with load
+                quality_bonus = metrics.health_score * 5.0  # Extra bonus for healthy models
+                score += quality_bonus
+            else:  # balanced
+                load_penalty = metrics.current_load * 10.0
+            
             score -= load_penalty
         
         # Learning system score (20% weight)
@@ -481,40 +543,99 @@ class MultiModelManager:
                     score += rec_score * 20.0
                     break
         
-        # Context suitability (10% weight)
+        # Advanced context suitability (15% weight)
         request_length = len(user_request)
         context_length = sum(len(str(v)) for v in context_info.values())
         total_length = request_length + context_length
         
-        # Prefer models with appropriate context windows
-        if total_length < model_info.context_window * 0.5:
-            score += 10.0  # Good fit
-        elif total_length < model_info.context_window * 0.8:
-            score += 5.0   # Acceptable fit
-        elif total_length >= model_info.context_window:
-            score -= 20.0  # Too large
+        # Improved context window scoring
+        context_ratio = total_length / model_info.context_window if model_info.context_window > 0 else 0
         
-        # Specialization bonus (10% weight)
+        if context_ratio < 0.3:  # Very comfortable fit
+            score += 15.0
+        elif context_ratio < 0.6:  # Good fit
+            score += 12.0
+        elif context_ratio < 0.8:  # Acceptable fit
+            score += 8.0
+        elif context_ratio < 0.95:  # Tight fit but workable
+            score += 3.0
+        else:  # Too large
+            score -= 25.0
+        
+        # Bonus for large context models handling complex tasks
+        if task_complexity == "high" and model_info.context_window >= 16384:
+            score += 8.0
+        
+        # Enhanced specialization and domain matching (15% weight)
+        specialization_bonus = 0.0
+        
         if model_info.specialized_for:
             for specialization in model_info.specialized_for:
+                # Direct keyword matching
                 if any(keyword in user_request.lower() for keyword in specialization.split()):
-                    score += 10.0
-                    break
+                    specialization_bonus += 12.0
+                
+                # Domain-specific bonuses
+                if task_domain in specialization.lower():
+                    specialization_bonus += 8.0
         
-        # Constraint penalties
+        # Task complexity matching
+        if task_complexity == "high":
+            # Prefer larger, more capable models for complex tasks
+            if "33b" in model_name or "70b" in model_name:
+                specialization_bonus += 10.0
+            elif "13b" in model_name or "15b" in model_name:
+                specialization_bonus += 5.0
+        elif task_complexity == "low":
+            # Smaller models can handle simple tasks efficiently
+            if "7b" in model_name or "6.7b" in model_name:
+                specialization_bonus += 5.0
+        
+        score += min(20.0, specialization_bonus)  # Cap the specialization bonus
+        
+        # Enhanced constraint handling and penalties
+        constraint_penalty = 0.0
+        
         if constraints.get('max_response_time_ms'):
             if metrics and metrics.avg_response_time_ms > constraints['max_response_time_ms']:
-                score -= 15.0
+                constraint_penalty += 20.0
         
         if constraints.get('min_quality_score'):
             if metrics and metrics.success_rate_24h < constraints['min_quality_score']:
-                score -= 25.0
+                constraint_penalty += 30.0
         
-        # Resource availability
+        if constraints.get('preferred_languages'):
+            preferred_langs = constraints['preferred_languages']
+            if not any(lang.lower() in user_request.lower() for lang in preferred_langs):
+                # Check if model excels at any preferred language
+                lang_support = any(lang.lower() in ' '.join(model_info.strengths).lower() 
+                                 for lang in preferred_langs)
+                if lang_support:
+                    score += 5.0
+        
+        score -= constraint_penalty
+        
+        # Advanced resource availability scoring
+        availability_penalty = 0.0
         if model_info.status != ModelStatus.AVAILABLE:
-            score -= 50.0
+            availability_penalty += 60.0
         elif model_info.status == ModelStatus.BUSY:
-            score -= 20.0
+            if urgency_level == "high":
+                availability_penalty += 30.0  # Heavy penalty for urgent tasks
+            else:
+                availability_penalty += 15.0  # Moderate penalty for non-urgent
+        
+        score -= availability_penalty
+        
+        # Final score adjustments based on priority
+        if performance_priority == "quality":
+            # Boost score for known high-quality models
+            if any(indicator in model_name.lower() for indicator in ["deepseek", "claude", "gpt-4"]):
+                score *= 1.1
+        elif performance_priority == "speed":
+            # Boost score for fast models (typically smaller ones)
+            if any(indicator in model_name.lower() for indicator in ["7b", "8b", "phi", "gemma"]):
+                score *= 1.1
         
         return max(0.0, min(100.0, score))  # Normalize to 0-100
     
@@ -576,8 +697,18 @@ class MultiModelManager:
             
             # Process request with timeout
             try:
+                # Collect response from async generator
+                response_parts = []
+                async def collect_response():
+                    async for chunk in client.generate(selected_model, prompt, options=options):
+                        if 'response' in chunk:
+                            response_parts.append(chunk['response'])
+                        if chunk.get('done', False):
+                            break
+                    return ''.join(response_parts)
+                
                 response = await asyncio.wait_for(
-                    client.generate_text(prompt, options),
+                    collect_response(),
                     timeout=self.model_timeout_seconds
                 )
                 
@@ -700,7 +831,7 @@ class MultiModelManager:
                 # Simple health check
                 start_time = time.time()
                 await asyncio.wait_for(
-                    client.generate_text("Hello", {"max_tokens": 5, "temperature": 0.1}),
+                    client.generate(model_name, "Hello", options={"temperature": 0.1}),
                     timeout=10.0
                 )
                 
@@ -917,7 +1048,7 @@ class MultiModelManager:
         
         # Sort by confidence
         recommendations.sort(key=lambda x: x['confidence'], reverse=True)
-        return recommendations[:5]  # Top 5 recommendations
+        return recommendations[:8]  # More recommendations for better selection
     
     async def cleanup(self):
         """Clean up resources"""
@@ -937,8 +1068,129 @@ class MultiModelManager:
                     await client.cleanup()
                 except:
                     pass
+            elif hasattr(client, 'close'):
+                try:
+                    await client.close()
+                except:
+                    pass
         
         logger.info("Multi-model manager cleanup completed")
+    
+    def _analyze_task_complexity(self, user_request: str, context_info: Dict[str, Any]) -> str:
+        """Analyze the complexity level of the task"""
+        request_lower = user_request.lower()
+        
+        # High complexity indicators
+        high_complexity_indicators = [
+            'distributed', 'microservice', 'scalable', 'enterprise', 'architecture',
+            'multi-threaded', 'concurrent', 'async', 'performance optimization',
+            'machine learning', 'ai model', 'algorithm design', 'system design',
+            'database design', 'security audit', 'cryptography', 'blockchain',
+            'large scale', 'production deployment', 'load balancing'
+        ]
+        
+        # Medium complexity indicators  
+        medium_complexity_indicators = [
+            'api design', 'framework', 'library integration', 'testing strategy',
+            'error handling', 'logging', 'monitoring', 'configuration',
+            'deployment', 'docker', 'kubernetes', 'ci/cd', 'automation',
+            'refactoring', 'optimization', 'performance', 'debugging complex'
+        ]
+        
+        # Check request content
+        high_count = sum(1 for indicator in high_complexity_indicators if indicator in request_lower)
+        medium_count = sum(1 for indicator in medium_complexity_indicators if indicator in request_lower)
+        
+        # Consider context factors
+        context_complexity = 0
+        if context_info:
+            code_blocks = len(context_info.get('code_blocks', []))
+            if code_blocks > 5:
+                context_complexity += 1
+            
+            project_size = context_info.get('project_size', 'small')
+            if project_size in ['large', 'enterprise']:
+                context_complexity += 1
+            
+            if len(user_request) > 500:  # Long, detailed requests
+                context_complexity += 1
+        
+        # Determine complexity
+        if high_count >= 2 or (high_count >= 1 and context_complexity >= 2):
+            return "high"
+        elif medium_count >= 2 or high_count >= 1 or context_complexity >= 1:
+            return "medium"
+        else:
+            return "low"
+    
+    def _identify_task_domain(self, user_request: str, context_info: Dict[str, Any]) -> str:
+        """Identify the primary domain of the task"""
+        request_lower = user_request.lower()
+        
+        domain_indicators = {
+            'web_development': ['web', 'html', 'css', 'javascript', 'react', 'vue', 'angular', 'frontend', 'backend', 'api', 'rest', 'graphql'],
+            'mobile_development': ['mobile', 'ios', 'android', 'swift', 'kotlin', 'react native', 'flutter', 'app store'],
+            'data_science': ['data', 'pandas', 'numpy', 'analysis', 'visualization', 'machine learning', 'ml', 'ai', 'statistics', 'dataset'],
+            'devops': ['docker', 'kubernetes', 'ci/cd', 'deployment', 'infrastructure', 'aws', 'azure', 'gcp', 'terraform', 'ansible'],
+            'systems_programming': ['c++', 'rust', 'go', 'system', 'performance', 'memory', 'low level', 'embedded', 'kernel'],
+            'database': ['sql', 'database', 'postgresql', 'mysql', 'mongodb', 'redis', 'query', 'schema', 'migration'],
+            'security': ['security', 'authentication', 'encryption', 'vulnerability', 'penetration', 'audit', 'cryptography'],
+            'game_development': ['game', 'unity', 'unreal', 'graphics', 'shader', 'rendering', '3d', 'physics'],
+            'enterprise': ['enterprise', 'business', 'erp', 'crm', 'workflow', 'integration', 'scalability'],
+            'general_programming': []  # Default fallback
+        }
+        
+        domain_scores = {}
+        for domain, indicators in domain_indicators.items():
+            if domain == 'general_programming':
+                continue
+            score = sum(1 for indicator in indicators if indicator in request_lower)
+            if score > 0:
+                domain_scores[domain] = score
+        
+        if domain_scores:
+            return max(domain_scores.items(), key=lambda x: x[1])[0]
+        else:
+            return 'general_programming'
+    
+    def _assess_urgency(self, constraints: Dict[str, Any]) -> str:
+        """Assess the urgency level of the request"""
+        if not constraints:
+            return "normal"
+        
+        # Check for urgency indicators
+        max_response_time = constraints.get('max_response_time_ms', 0)
+        if max_response_time > 0:
+            if max_response_time < 5000:  # Less than 5 seconds
+                return "high"
+            elif max_response_time < 15000:  # Less than 15 seconds
+                return "medium"
+        
+        # Check for explicit urgency
+        priority = constraints.get('priority', 'normal').lower()
+        if priority in ['urgent', 'high', 'critical']:
+            return "high"
+        elif priority in ['medium', 'elevated']:
+            return "medium"
+        
+        return "normal"
+    
+    def _get_related_capabilities(self, capability: ModelCapability) -> List[ModelCapability]:
+        """Get capabilities related to the required one"""
+        related_map = {
+            ModelCapability.CODE_GENERATION: [ModelCapability.ARCHITECTURE, ModelCapability.TESTING],
+            ModelCapability.DEBUGGING: [ModelCapability.CODE_REVIEW, ModelCapability.TESTING, ModelCapability.OPTIMIZATION],
+            ModelCapability.CODE_REVIEW: [ModelCapability.DEBUGGING, ModelCapability.OPTIMIZATION],
+            ModelCapability.ARCHITECTURE: [ModelCapability.CODE_GENERATION, ModelCapability.OPTIMIZATION],
+            ModelCapability.TESTING: [ModelCapability.CODE_GENERATION, ModelCapability.DEBUGGING],
+            ModelCapability.OPTIMIZATION: [ModelCapability.CODE_REVIEW, ModelCapability.DEBUGGING],
+            ModelCapability.DOCUMENTATION: [ModelCapability.EXPLANATION, ModelCapability.CODE_REVIEW],
+            ModelCapability.EXPLANATION: [ModelCapability.DOCUMENTATION, ModelCapability.CONVERSATION],
+            ModelCapability.CONVERSATION: [ModelCapability.EXPLANATION],
+            ModelCapability.TRANSLATION: []
+        }
+        
+        return related_map.get(capability, [])
 
 # Utility functions
 

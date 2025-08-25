@@ -713,7 +713,8 @@ class EnhancedAIAssistant:
         quality_bonus += min(0.2, found_indicators * 0.05)
         
         # Check for structured approach
-        if 'step' in response.lower() or numbered_list := re.search(r'\d+\.', response):
+        numbered_list = re.search(r'\d+\.', response)
+        if 'step' in response.lower() or numbered_list:
             quality_bonus += 0.1
         
         return min(0.3, quality_bonus)

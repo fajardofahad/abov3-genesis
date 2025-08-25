@@ -614,6 +614,207 @@ class SmartContextManager:
         self.cache_hits = data.get("cache_hits", 0)
         
         logger.info(f"Imported {len(self.context_items)} context items")
+    
+    def _is_semantically_similar(self, item: ContextItem, selected_items: List[ContextItem]) -> bool:
+        """Check if item is semantically similar to already selected items"""
+        if not self.context_compression_enabled:
+            return False
+        
+        # Simple similarity check based on content overlap
+        item_words = set(item.content.lower().split())
+        if len(item_words) < 5:  # Too short to compare
+            return False
+        
+        for selected in selected_items:
+            if selected.content_type == item.content_type:
+                selected_words = set(selected.content.lower().split())
+                if len(selected_words) < 5:
+                    continue
+                
+                # Calculate Jaccard similarity
+                intersection = len(item_words.intersection(selected_words))
+                union = len(item_words.union(selected_words))
+                similarity = intersection / union if union > 0 else 0
+                
+                if similarity > self.semantic_similarity_threshold:
+                    return True
+        
+        return False
+    
+    def _compress_similar_content(self, item: ContextItem, selected_items: List[ContextItem]) -> Optional[ContextItem]:
+        """Compress similar content items"""
+        # Find most similar item
+        best_match = None
+        best_similarity = 0
+        
+        item_words = set(item.content.lower().split())
+        
+        for selected in selected_items:
+            if selected.content_type == item.content_type:
+                selected_words = set(selected.content.lower().split())
+                intersection = len(item_words.intersection(selected_words))
+                union = len(item_words.union(selected_words))
+                similarity = intersection / union if union > 0 else 0
+                
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match = selected
+        
+        if best_match and best_similarity > 0.5:
+            # Create compressed version
+            unique_content = item.content[:200] + "... (similar content compressed)"
+            compressed_item = ContextItem(
+                content=unique_content,
+                content_type=item.content_type,
+                priority=item.priority,
+                source=f"compressed_{item.source}",
+                metadata={**item.metadata, "compressed": True, "original_length": len(item.content)}
+            )
+            return compressed_item
+        
+        return None
+    
+    def _is_relevant_conversation(self, item: ContextItem, query: str, selected_items: List[ContextItem]) -> bool:
+        """Check if conversation item is relevant to current query"""
+        if not query:
+            return True  # Include if no query to filter on
+        
+        # Check for keyword overlap
+        query_words = set(query.lower().split())
+        content_words = set(item.content.lower().split())
+        
+        overlap = len(query_words.intersection(content_words))
+        relevance_score = overlap / len(query_words) if query_words else 0
+        
+        return relevance_score > 0.1  # At least 10% overlap
+    
+    def _maintains_content_diversity(self, item: ContextItem, selected_items: List[ContextItem], target_tokens: int) -> bool:
+        """Check if adding this item maintains good content diversity"""
+        if not self.dynamic_prioritization:
+            return True
+        
+        # Count content types
+        type_counts = {}
+        for selected in selected_items:
+            type_counts[selected.content_type] = type_counts.get(selected.content_type, 0) + 1
+        
+        # Check if this type is overrepresented
+        current_count = type_counts.get(item.content_type, 0)
+        total_items = len(selected_items)
+        
+        if total_items > 0:
+            type_ratio = current_count / total_items
+            # Don't let any single type dominate more than 40% unless it's critical
+            if type_ratio > 0.4 and item.priority != ContextPriority.CRITICAL:
+                return False
+        
+        return True
+    
+    def _select_diverse_low_priority(self, items: List[Tuple[float, ContextItem, str]], remaining_tokens: int) -> List[ContextItem]:
+        """Select diverse low priority items to fill remaining space"""
+        selected = []
+        used_tokens = 0
+        type_counts = {}
+        
+        # Sort by score but maintain diversity
+        items_by_score = sorted(items, key=lambda x: x[0], reverse=True)
+        
+        for score, item, item_id in items_by_score:
+            if used_tokens + item.tokens > remaining_tokens:
+                continue
+            
+            # Check diversity
+            current_count = type_counts.get(item.content_type, 0)
+            if current_count < 2:  # Max 2 of each type in low priority
+                selected.append(item)
+                used_tokens += item.tokens
+                type_counts[item.content_type] = current_count + 1
+                
+                if used_tokens >= remaining_tokens * 0.9:  # Use 90% of remaining space
+                    break
+        
+        return selected
+    
+    def _optimize_content_for_context(self, content: str, content_type: ContentType) -> str:
+        """Optimize content for better context efficiency"""
+        if content_type == ContentType.CODE_EXAMPLE:
+            # For code, keep structure but remove excessive comments
+            lines = content.split('\\n')
+            optimized_lines = []
+            for line in lines:
+                # Keep important lines, compress comments
+                if line.strip().startswith('#') and len(line) > 80:
+                    optimized_lines.append(line[:77] + '...')
+                else:
+                    optimized_lines.append(line)
+            return '\\n'.join(optimized_lines)
+        
+        elif content_type == ContentType.DOCUMENTATION:
+            # For docs, keep key information, compress examples
+            if len(content) > 1000:
+                # Simple truncation with ellipsis
+                return content[:800] + '... (truncated for context efficiency)'
+        
+        return content
+    
+    def _apply_final_compression(self, context: str, target_tokens: int) -> str:
+        """Apply final compression if context is still too large"""
+        current_tokens = self._estimate_total_tokens(context)
+        if current_tokens <= target_tokens:
+            return context
+        
+        # Calculate compression ratio needed
+        compression_ratio = target_tokens / current_tokens
+        
+        # Simple approach: truncate each section proportionally
+        sections = context.split('\\n\\n')
+        compressed_sections = []
+        
+        for section in sections:
+            if section.strip():
+                target_length = int(len(section) * compression_ratio)
+                if target_length < len(section):
+                    compressed_sections.append(section[:target_length] + '...')
+                else:
+                    compressed_sections.append(section)
+        
+        return '\\n\\n'.join(compressed_sections)
+    
+    def _estimate_total_tokens(self, text: str) -> int:
+        """Estimate total tokens in text"""
+        # Improved estimation
+        return max(1, int(len(text) * 0.25))
+    
+    def _calculate_quality_bonus(self, item: ContextItem) -> float:
+        """Calculate quality bonus based on content characteristics"""
+        content = item.content
+        quality_score = 1.0
+        
+        # Length appropriateness
+        if 50 <= len(content) <= 2000:
+            quality_score += 0.1
+        elif len(content) < 20:
+            quality_score -= 0.1
+        
+        # Content structure indicators
+        if any(indicator in content for indicator in ['```', '1.', '2.', '3.', '-']):
+            quality_score += 0.1  # Well-structured content
+        
+        # Code quality indicators
+        if item.content_type == ContentType.CODE_EXAMPLE:
+            if any(keyword in content for keyword in ['def ', 'class ', 'function', 'import']):
+                quality_score += 0.1
+            if any(keyword in content for keyword in ['try:', 'except:', 'if __name__']):
+                quality_score += 0.05  # Good practices
+        
+        # Recency bonus
+        age_hours = (datetime.now().timestamp() - item.timestamp) / 3600
+        if age_hours < 1:
+            quality_score += 0.1  # Very recent
+        elif age_hours < 24:
+            quality_score += 0.05  # Recent
+        
+        return min(1.5, quality_score)  # Cap at 1.5x bonus
 
 # Utility functions for common context operations
 

@@ -1,0 +1,160 @@
+{
+  "timestamp": "2025-08-24T22:45:16.954466",
+  "total_tests": 24,
+  "passed": 24,
+  "failed": 0,
+  "errors": 0,
+  "skipped": 0,
+  "test_details": [
+    {
+      "test": "test_code_generation_detection (tests.test_assistant.TestRequestDetection.test_code_generation_detection)",
+      "status": "passed",
+      "duration": 0.001092,
+      "details": null
+    },
+    {
+      "test": "test_debug_request_detection (tests.test_assistant.TestRequestDetection.test_debug_request_detection)",
+      "status": "passed",
+      "duration": 0.000745,
+      "details": null
+    },
+    {
+      "test": "test_file_modification_detection (tests.test_assistant.TestRequestDetection.test_file_modification_detection)",
+      "status": "passed",
+      "duration": 0.000637,
+      "details": null
+    },
+    {
+      "test": "test_file_operation_detection (tests.test_assistant.TestRequestDetection.test_file_operation_detection)",
+      "status": "passed",
+      "duration": 0.000549,
+      "details": null
+    },
+    {
+      "test": "test_request_type_detection_priority (tests.test_assistant.TestRequestDetection.test_request_type_detection_priority)",
+      "status": "passed",
+      "duration": 0.001577,
+      "details": null
+    },
+    {
+      "test": "test_inline_code_extraction (tests.test_assistant.TestCodeExtraction.test_inline_code_extraction)",
+      "status": "passed",
+      "duration": 4.3e-05,
+      "details": null
+    },
+    {
+      "test": "test_language_detection (tests.test_assistant.TestCodeExtraction.test_language_detection)",
+      "status": "passed",
+      "duration": 6.4e-05,
+      "details": null
+    },
+    {
+      "test": "test_markdown_code_block_extraction (tests.test_assistant.TestCodeExtraction.test_markdown_code_block_extraction)",
+      "status": "passed",
+      "duration": 0.000103,
+      "details": null
+    },
+    {
+      "test": "test_code_file_creation (tests.test_assistant.TestCodeGeneration.test_code_file_creation)",
+      "status": "passed",
+      "duration": 0.002624,
+      "details": null
+    },
+    {
+      "test": "test_multiple_file_generation (tests.test_assistant.TestCodeGeneration.test_multiple_file_generation)",
+      "status": "passed",
+      "duration": 0.001484,
+      "details": null
+    },
+    {
+      "test": "test_error_recovery (tests.test_assistant.TestErrorHandling.test_error_recovery)",
+      "status": "passed",
+      "duration": 4.2e-05,
+      "details": null
+    },
+    {
+      "test": "test_malformed_code_handling (tests.test_assistant.TestErrorHandling.test_malformed_code_handling)",
+      "status": "passed",
+      "duration": 3.2e-05,
+      "details": null
+    },
+    {
+      "test": "test_missing_project_directory (tests.test_assistant.TestErrorHandling.test_missing_project_directory)",
+      "status": "passed",
+      "duration": 4.2e-05,
+      "details": null
+    },
+    {
+      "test": "test_model_fallback (tests.test_assistant.TestErrorHandling.test_model_fallback)",
+      "status": "passed",
+      "duration": 2.5e-05,
+      "details": null
+    },
+    {
+      "test": "test_file_deletion_confirmation (tests.test_assistant.TestFileOperations.test_file_deletion_confirmation)",
+      "status": "passed",
+      "duration": 0.001797,
+      "details": null
+    },
+    {
+      "test": "test_file_rename (tests.test_assistant.TestFileOperations.test_file_rename)",
+      "status": "passed",
+      "duration": 0.001915,
+      "details": null
+    },
+    {
+      "test": "test_project_analysis (tests.test_assistant.TestProjectAnalysis.test_project_analysis)",
+      "status": "passed",
+      "duration": 0.004429,
+      "details": null
+    },
+    {
+      "test": "test_project_status_detection (tests.test_assistant.TestProjectAnalysis.test_project_status_detection)",
+      "status": "passed",
+      "duration": 0.00358,
+      "details": null
+    },
+    {
+      "test": "test_complete_code_generation_flow (tests.test_assistant.TestIntegration.test_complete_code_generation_flow)",
+      "status": "passed",
+      "duration": 0.002354,
+      "details": null
+    },
+    {
+      "test": "test_conversation_context_retention (tests.test_assistant.TestIntegration.test_conversation_context_retention)",
+      "status": "passed",
+      "duration": 0.002129,
+      "details": null
+    },
+    {
+      "test": "test_code_generation_workflow (__main__.IntegrationTests.test_code_generation_workflow)",
+      "status": "passed",
+      "duration": 0.004229,
+      "details": null
+    },
+    {
+      "test": "test_debugging_tools (__main__.IntegrationTests.test_debugging_tools)",
+      "status": "passed",
+      "duration": 0.001046,
+      "details": null
+    },
+    {
+      "test": "test_error_handling (__main__.IntegrationTests.test_error_handling)",
+      "status": "passed",
+      "duration": 0.002319,
+      "details": null
+    },
+    {
+      "test": "test_validation (__main__.IntegrationTests.test_validation)",
+      "status": "passed",
+      "duration": 0.014798,
+      "details": null
+    }
+  ],
+  "coverage": {},
+  "performance": {},
+  "issues_found": [
+    "Found 2 test failures"
+  ],
+  "recommendations": []
+}

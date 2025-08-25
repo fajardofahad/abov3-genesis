@@ -1,0 +1,96 @@
+ABOV3 Genesis Performance Test Report
+==================================================
+Generated: 2025-08-24 22:47:33
+
+PERFORMANCE BENCHMARK RESULTS
+------------------------------
+
+Scenario: Simple Code Generation
+  Total Requests: 10
+  Success Rate: 0.00%
+  Response Times:
+    Average: 1.08s
+    Median: 1.02s
+    95th Percentile: 1.65s
+    99th Percentile: 1.65s
+  Throughput: 0.8 requests/second
+  Errors: 10 (1 unique)
+
+Scenario: Complex Code Generation
+  Total Requests: 10
+  Success Rate: 0.00%
+  Response Times:
+    Average: 1.11s
+    Median: 1.02s
+    95th Percentile: 1.95s
+    99th Percentile: 1.95s
+  Throughput: 0.8 requests/second
+  Errors: 10 (1 unique)
+
+Scenario: Debugging
+  Total Requests: 10
+  Success Rate: 0.00%
+  Response Times:
+    Average: 1.11s
+    Median: 1.02s
+    95th Percentile: 1.93s
+    99th Percentile: 1.93s
+  Throughput: 0.8 requests/second
+  Errors: 10 (1 unique)
+
+Scenario: Code Review
+  Total Requests: 10
+  Success Rate: 0.00%
+  Response Times:
+    Average: 1.10s
+    Median: 1.02s
+    95th Percentile: 1.91s
+    99th Percentile: 1.91s
+  Throughput: 0.8 requests/second
+  Errors: 10 (1 unique)
+
+Scenario: Architecture Design
+  Total Requests: 10
+  Success Rate: 0.00%
+  Response Times:
+    Average: 1.20s
+    Median: 1.02s
+    95th Percentile: 1.94s
+    99th Percentile: 1.94s
+  Throughput: 0.8 requests/second
+  Errors: 10 (1 unique)
+
+Scenario: Explanation
+  Total Requests: 10
+  Success Rate: 0.00%
+  Response Times:
+    Average: 1.11s
+    Median: 1.02s
+    95th Percentile: 1.94s
+    99th Percentile: 1.94s
+  Throughput: 0.8 requests/second
+  Errors: 10 (1 unique)
+
+SYSTEM INFORMATION
+------------------
+CPU Cores: 16
+Total Memory: 31.4 GB
+Available Memory: 21.8 GB
+Platform: win32
+
+RECOMMENDations
+---------------
+- Improve reliability for simple_code_generation (success rate: 0.00%)
+- Increase throughput for simple_code_generation (current: 0.8 RPS)
+- Improve reliability for complex_code_generation (success rate: 0.00%)
+- Increase throughput for complex_code_generation (current: 0.8 RPS)
+- Improve reliability for debugging (success rate: 0.00%)
+- Increase throughput for debugging (current: 0.8 RPS)
+- Improve reliability for code_review (success rate: 0.00%)
+- Increase throughput for code_review (current: 0.8 RPS)
+- Improve reliability for architecture_design (success rate: 0.00%)
+- Increase throughput for architecture_design (current: 0.8 RPS)
+- Improve reliability for explanation (success rate: 0.00%)
+- Increase throughput for explanation (current: 0.8 RPS)
+
+End of Report

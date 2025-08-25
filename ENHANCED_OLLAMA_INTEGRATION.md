@@ -37,17 +37,32 @@ Enhanced AI Assistant
 
 ## 🔧 Installation & Setup
 
+> **📖 For detailed installation instructions, see our comprehensive [Installation Guide](docs/INSTALLATION_GUIDE.md)**
+
 ### Prerequisites
 - Python 3.8+
 - Ollama installed and running
 - At least one code-capable model (codellama, deepseek-coder, etc.)
 
-### Install Ollama Models
+### Quick Setup
 ```bash
-# Install recommended models for best performance
-ollama pull codellama:7b          # Fast, good for general coding
-ollama pull codellama:13b         # Better quality, slower
-ollama pull deepseek-coder:6.7b   # High-quality code generation
+# 1. Install ABOV3 Genesis
+pip install abov3-genesis
+
+# 2. Install Ollama (if not already installed)
+# Visit https://ollama.ai for platform-specific installers
+
+# 3. Install recommended models
+ollama pull llama3               # General purpose, well-balanced
+ollama pull codellama:7b         # Fast, good for general coding
+ollama pull deepseek-coder:6.7b  # High-quality code generation
+ollama pull gemma:2b             # Lightweight, fast responses
+```
+
+### Advanced Configuration
+For detailed model configuration, performance tuning, and optimization strategies, refer to:
+- **[Ollama Configuration Guide](docs/OLLAMA_CONFIGURATION.md)** - Complete model setup and tuning
+- **[Performance Optimization Guide](docs/PERFORMANCE_OPTIMIZATION.md)** - Advanced performance tuning
 ollama pull llama3:8b             # Good for explanations and general tasks
 ollama pull qwen2:7b              # Large context window (32k tokens)
 ```

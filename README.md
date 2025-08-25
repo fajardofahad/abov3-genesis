@@ -310,11 +310,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Click** - For elegant command-line interfaces
 - **The Python Community** - For the amazing ecosystem
 
+## 📚 Documentation
+
+### Quick Navigation
+- **[📖 Documentation Hub](docs/README.md)** - Complete documentation index
+- **[🚀 User Guide](docs/USER_GUIDE.md)** - Learn to use ABOV3 like Claude
+- **[💾 Installation Guide](docs/INSTALLATION_GUIDE.md)** - Platform-specific setup
+- **[🛠️ API Documentation](docs/API_DOCUMENTATION.md)** - Developer reference
+
+### Essential Guides
+- **[🎯 Examples & Tutorials](docs/EXAMPLES_AND_TUTORIALS.md)** - Practical examples for all use cases
+- **[⚙️ Ollama Configuration](docs/OLLAMA_CONFIGURATION.md)** - AI model setup and optimization  
+- **[⚡ Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md)** - Advanced tuning guide
+- **[🔧 Troubleshooting](docs/TROUBLESHOOTING.md)** - Solutions for common issues
+- **[🤝 Contributing](docs/CONTRIBUTING.md)** - How to contribute to the project
+
 ## 🔗 Links
 
-- **Documentation**: [Coming Soon]
+- **[📚 Complete Documentation](docs/README.md)** - Start here for all documentation
 - **GitHub**: https://github.com/fajardofahad/abov3-genesis
 - **Issues**: https://github.com/fajardofahad/abov3-genesis/issues
+- **Discussions**: https://github.com/fajardofahad/abov3-genesis/discussions
 - **Discord**: [Community Coming Soon]
 
 ---

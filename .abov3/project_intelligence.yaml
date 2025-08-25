@@ -1,0 +1,55 @@
+analyzed_at: '2025-08-24T22:49:48.942216'
+confidence_score: 0.48333333333333334
+dependencies:
+  external_libs: []
+  internal_imports: []
+  package_files:
+  - requirements.txt
+entry_points: []
+frameworks: []
+key_files:
+- README.md
+- requirements.txt
+- setup.py
+languages:
+  python:
+    files: 62
+    percentage: 100.0
+last_updated: '2025-08-24T22:49:48.942228'
+learning_notes: []
+patterns:
+  common_patterns: []
+  indentation: unknown
+  naming_convention: unknown
+primary_language: python
+project_type: library
+purpose: A reusable library or package for other developers
+structure:
+  depth: 2
+  directories:
+  - abov3
+  - abov3\agents
+  - abov3\core
+  - abov3\dependencies
+  - abov3\genesis
+  - abov3\infrastructure
+  - abov3\permissions
+  - abov3\project
+  - abov3\session
+  - abov3\tasks
+  - abov3\ui
+  - abov3\utils
+  - deploy
+  - deploy\development
+  - examples
+  - tests
+  file_types: !!python/object/apply:collections.Counter
+  - .bat: 1
+    .json: 1
+    .log: 1
+    .md: 6
+    .py: 62
+    .txt: 3
+    no_extension: 2
+  size_bytes: 1409499
+  total_files: 76

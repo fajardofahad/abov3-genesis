@@ -1,0 +1,60 @@
+2025-08-24 22:37:39,199 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-08-24 22:38:23,824 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-08-24 22:38:24,140 - abov3.core.assistant_v2 - INFO - Initialized all project components for: C:\Users\fajar\AppData\Local\Temp\tmper0x69_e
+2025-08-24 22:38:24,142 - abov3.core.assistant_v2 - INFO - Initialized all project components for: C:\Users\fajar\AppData\Local\Temp\tmpu9uo90v0
+2025-08-24 22:38:24,145 - abov3.core.assistant_v2 - ERROR - Code generation error: 'EnhancedAssistant' object has no attribute '_determine_file_path'
+2025-08-24 22:38:24,150 - ABOV3.Debugger - [36mDEBUG[0m -   Args: (5,)
+2025-08-24 22:38:24,154 - ABOV3.ErrorHandler - WARNING - {
+  "error_type": "ValueError",
+  "error_message": "Test error",
+  "category": "validation_error",
+  "severity": "medium",
+  "context": {
+    "request_id": null,
+    "user_input": null,
+    "project_path": null,
+    "operation": "test_operation",
+    "timestamp": "2025-08-24T22:38:24.153537",
+    "environment": {
+      "platform": "win32",
+      "python_version": "3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]",
+      "working_dir": "C:\\Users\\fajar\\Documents\\ABOV3\\abov3-Genesis\\abov3-genesis-v1.0.0"
+    },
+    "additional_data": {}
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\fajar\\Documents\\ABOV3\\abov3-Genesis\\abov3-genesis-v1.0.0\\run_tests.py\", line 195, in test_error_handling\n    raise ValueError(\"Test error\")\nValueError: Test error\n",
+  "timestamp": "2025-08-24T22:38:24.154335",
+  "recovery_attempted": false,
+  "recovery_successful": false,
+  "recovery_method": null
+}
+2025-08-24 22:45:16,683 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-08-24 22:45:16,979 - abov3.core.assistant_v2 - INFO - Initialized all project components for: C:\Users\fajar\AppData\Local\Temp\tmp6qobo8e7
+2025-08-24 22:45:16,981 - abov3.core.assistant_v2 - INFO - Initialized all project components for: C:\Users\fajar\AppData\Local\Temp\tmp71ckh79n
+2025-08-24 22:45:16,987 - ABOV3.Debugger - [36mDEBUG[0m - -> Entering test_function
+2025-08-24 22:45:16,987 - ABOV3.Debugger - [36mDEBUG[0m -   Args: (5,)
+2025-08-24 22:45:16,987 - ABOV3.Debugger - [36mDEBUG[0m - <- Exiting test_function with result: 10
+2025-08-24 22:45:16,989 - ABOV3.ErrorHandler - WARNING - {
+  "error_type": "ValueError",
+  "error_message": "Test error",
+  "category": "validation_error",
+  "severity": "medium",
+  "context": {
+    "request_id": null,
+    "user_input": null,
+    "project_path": null,
+    "operation": "test_operation",
+    "timestamp": "2025-08-24T22:45:16.989005",
+    "environment": {
+      "platform": "win32",
+      "python_version": "3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]",
+      "working_dir": "C:\\Users\\fajar\\Documents\\ABOV3\\abov3-Genesis\\abov3-genesis-v1.0.0"
+    },
+    "additional_data": {}
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\fajar\\Documents\\ABOV3\\abov3-Genesis\\abov3-genesis-v1.0.0\\run_tests.py\", line 195, in test_error_handling\n    raise ValueError(\"Test error\")\nValueError: Test error\n",
+  "timestamp": "2025-08-24T22:45:16.989752",
+  "recovery_attempted": false,
+  "recovery_successful": false,
+  "recovery_method": null
+}
