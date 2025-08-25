@@ -113,12 +113,12 @@ class Assistant:
                 response_text = await self._handle_full_application_request(user_input, messages, model)
             elif is_project_status:
                 response_text = await self._handle_project_status(user_input, messages, model)
-            elif is_file_operation:
-                response_text = await self._handle_file_operations(user_input)
+            elif is_code_request:  # Code modification should come before file operations
+                response_text = await self._handle_code_generation(user_input, messages, model)
             elif is_debug_request:
                 response_text = await self._handle_debug_request(user_input, messages, model)
-            elif is_code_request:
-                response_text = await self._handle_code_generation(user_input, messages, model)
+            elif is_file_operation:  # File operations last (for simple file ops like rename/delete)
+                response_text = await self._handle_file_operations(user_input)
             else:
                 # Get AI response
                 response_text = await self._get_ai_response(model, messages)
@@ -616,172 +616,94 @@ I'm still here to help with manual guidance and project management!"""
             return f"❌ Error during code generation: {str(e)}"
     
     async def _handle_file_modification(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
-        """Handle modification of existing files like Claude does"""
-        import os
+        """Handle modification of existing files like Claude does - simple and direct"""
         from pathlib import Path
         
         try:
-            # Find existing files that match the context
             project_path = Path(self.code_generator.project_path)
-            relevant_files = []
             
-            # Look for different file types based on context - search recursively
-            context_lower = user_input.lower()
-            if any(word in context_lower for word in ['website', 'web', 'html', 'page', 'theme', 'style']):
-                # Look for HTML, CSS, JS files recursively
-                file_patterns = ['**/*.html', '**/*.htm', '**/*.css', '**/*.js']
-            elif any(word in context_lower for word in ['script', 'python', 'py']):
-                file_patterns = ['**/*.py']
-            elif any(word in context_lower for word in ['style', 'css']):
-                file_patterns = ['**/*.css', '**/*.html', '**/*.htm']
-            else:
-                # General search for common web files
-                file_patterns = ['**/*.html', '**/*.htm', '**/*.css', '**/*.js', '**/*.py']
+            # Find all relevant files in project
+            all_files = []
+            for file_path in project_path.rglob('*'):
+                if file_path.is_file() and file_path.suffix in ['.html', '.css', '.js', '.py', '.md', '.txt']:
+                    all_files.append(file_path)
             
-            # Find matching files recursively
-            for pattern in file_patterns:
-                try:
-                    for file_path in project_path.glob(pattern):
-                        if file_path.is_file():
-                            relevant_files.append(file_path)
-                            print(f"[DEBUG] Found file for modification: {file_path.name}")
-                except:
-                    pass
+            if not all_files:
+                return "❌ No files found in project to modify"
             
-            if not relevant_files:
-                print("[DEBUG] No existing files found for modification, creating new files")
-                return await self._handle_new_file_creation(user_input, messages, model)
-            
-            print(f"[DEBUG] Found {len(relevant_files)} files for potential modification")
-            
-            # Read existing files and create modification context
+            # Read all files
             file_contents = {}
-            for file_path in relevant_files:
+            for file_path in all_files:
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
-                        file_contents[file_path.name] = {
-                            'path': file_path,
-                            'content': content
-                        }
-                        print(f"[DEBUG] Read existing file: {file_path.name} ({len(content)} chars)")
-                except Exception as e:
-                    print(f"[DEBUG] Could not read {file_path}: {e}")
+                        file_contents[str(file_path)] = content
+                except:
+                    continue
             
             if not file_contents:
-                return await self._handle_new_file_creation(user_input, messages, model)
+                return "❌ Could not read any project files"
             
-            # For theme/styling changes, directly modify the CSS file
-            if any(word in user_input.lower() for word in ['theme', 'color', 'style', 'brown', 'beige', 'modern']):
-                return await self._handle_theme_changes(user_input, file_contents)
+            # Create simple prompt for the AI like Claude does
+            files_context = []
+            for file_path, content in file_contents.items():
+                file_name = Path(file_path).name
+                files_context.append(f"**{file_name}:**\n```\n{content}\n```\n")
             
-            # For text replacements, directly modify files  
-            if any(word in user_input.lower() for word in ['change', 'replace', 'update']) and any(word in user_input.lower() for word in ['restaurant', 'coffee shop']):
-                return await self._handle_text_replacements(user_input, file_contents)
-            
-            # For other modifications, use AI with a simple approach
-            return await self._handle_general_modifications(user_input, file_contents, messages, model)
-            
-        except Exception as e:
-            return f"❌ Error during file modification: {str(e)}"
-    
-    async def _handle_theme_changes(self, user_input: str, file_contents: Dict) -> str:
-        """Handle theme and styling changes directly"""
-        try:
-            # Find CSS file
-            css_file = None
-            for filename, info in file_contents.items():
-                if filename.endswith('.css'):
-                    css_file = info
-                    break
-            
-            if not css_file:
-                return "❌ No CSS file found to modify theme"
-            
-            # Apply theme changes based on user request
-            css_content = css_file['content']
-            
-            # Brown and beige theme updates
-            if 'brown' in user_input.lower() or 'beige' in user_input.lower():
-                # Replace common colors with brown/beige palette
-                css_content = css_content.replace('#333', '#8B4513')  # Dark brown
-                css_content = css_content.replace('#666', '#A0522D')  # Sienna 
-                css_content = css_content.replace('#999', '#D2B48C')  # Tan
-                css_content = css_content.replace('#ccc', '#F5F5DC')  # Beige
-                css_content = css_content.replace('#fff', '#FFF8DC')  # Cornsilk
-                css_content = css_content.replace('white', '#FFF8DC')
-                css_content = css_content.replace('black', '#8B4513')
-                
-                # Add modern brown theme variables at the top if not present
-                if ':root' not in css_content:
-                    theme_vars = """/* Modern Brown & Beige Theme */
-:root {
-    --primary-color: #8B4513;
-    --secondary-color: #D2B48C;
-    --accent-color: #A0522D;
-    --background-color: #FFF8DC;
-    --text-color: #654321;
-    --border-color: #DEB887;
-}
+            prompt = f"""I need to modify files in this project. Here are the current files:
 
-"""
-                    css_content = theme_vars + css_content
+{chr(10).join(files_context[:5])}  
+
+User request: {user_input}
+
+Please provide the complete updated file content for each file that needs to be changed. Use this format:
+
+**filename.ext**
+```
+complete updated content here
+```
+
+Only show files that actually need changes."""
             
-            # Write updated CSS
-            with open(css_file['path'], 'w', encoding='utf-8') as f:
-                f.write(css_content)
+            # Get AI response
+            ai_messages = [{"role": "user", "content": prompt}]
+            response = await self._get_ai_response(model, ai_messages)
             
-            # Also update HTML files to replace "Restaurant" with "Coffee Shop"
-            if 'coffee shop' in user_input.lower() or 'restaurant' in user_input.lower():
-                await self._replace_text_in_files(file_contents, 'restaurant', 'Coffee Shop')
-                await self._replace_text_in_files(file_contents, 'Restaurant', 'Coffee Shop')
+            # Apply changes directly - parse the AI response for file blocks
+            import re
+            file_blocks = re.findall(r'\*\*([^*]+)\*\*\s*```[^\n]*\n(.*?)```', response, re.DOTALL)
             
-            return f"✅ **Theme Updated Successfully!**\n\n🎨 Applied modern brown & beige color scheme\n📝 Updated text from 'Restaurant' to 'Coffee Shop'\n📁 Modified {css_file['path'].name} and HTML files"
+            if not file_blocks:
+                return response  # Just return AI response if no file blocks found
             
-        except Exception as e:
-            return f"❌ Error updating theme: {str(e)}"
-    
-    async def _replace_text_in_files(self, file_contents: Dict, old_text: str, new_text: str):
-        """Replace text in all files"""
-        for filename, info in file_contents.items():
-            if filename.endswith(('.html', '.htm')):
-                try:
-                    content = info['content']
-                    if old_text in content:
-                        updated_content = content.replace(old_text, new_text)
-                        with open(info['path'], 'w', encoding='utf-8') as f:
-                            f.write(updated_content)
-                        print(f"[DEBUG] Updated {filename}: replaced '{old_text}' with '{new_text}'")
-                except Exception as e:
-                    print(f"[DEBUG] Error updating {filename}: {e}")
-    
-    async def _handle_text_replacements(self, user_input: str, file_contents: Dict) -> str:
-        """Handle simple text replacement requests"""
-        try:
-            replacements_made = []
-            
-            # Common text replacements based on user input
-            if 'coffee shop' in user_input.lower() and 'restaurant' in user_input.lower():
-                await self._replace_text_in_files(file_contents, 'restaurant', 'coffee shop')
-                await self._replace_text_in_files(file_contents, 'Restaurant', 'Coffee Shop')
-                replacements_made.append("'Restaurant' → 'Coffee Shop'")
-            
-            if replacements_made:
-                return f"✅ **Text Updated Successfully!**\n\n📝 Replacements made:\n" + '\n'.join([f"   • {replacement}" for replacement in replacements_made])
-            else:
-                return "❌ No text replacements were identified from your request"
+            modified_files = []
+            for filename, new_content in file_blocks:
+                filename = filename.strip()
+                new_content = new_content.strip()
                 
-        except Exception as e:
-            return f"❌ Error making text replacements: {str(e)}"
-    
-    async def _handle_general_modifications(self, user_input: str, file_contents: Dict, messages: List, model: str) -> str:
-        """Handle general modifications using AI but in a simple way like Claude"""
-        try:
-            # Just return a simple message for now - the specific handlers above should catch most cases
-            return f"✅ **Request processed!**\n\n📝 Your modification request: '{user_input}'\n🔧 For complex modifications, try being more specific about what you want to change.\n\n💡 **Tip**: I work best with requests like:\n• 'Change the color to blue'\n• 'Update the title to My Website'\n• 'Make the font bigger'"
+                # Find matching file
+                target_file = None
+                for file_path in all_files:
+                    if file_path.name == filename:
+                        target_file = file_path
+                        break
+                
+                if target_file:
+                    try:
+                        with open(target_file, 'w', encoding='utf-8') as f:
+                            f.write(new_content)
+                        modified_files.append(filename)
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to write {filename}: {e}")
+            
+            if modified_files:
+                return f"✅ **Files updated successfully!**\n\n📝 Modified files:\n" + '\n'.join([f"• {f}" for f in modified_files]) + f"\n\n{response}"
+            else:
+                return response
             
         except Exception as e:
-            return f"❌ Error during modification: {str(e)}"
+            return f"❌ Error: {str(e)}"
+    
     
     async def _handle_new_file_creation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
         """Handle creation of new files"""
@@ -1079,12 +1001,13 @@ I'm still here to help with manual guidance and project management!"""
             'move file', 'copy file', 'duplicate file'
         ]
         
-        # Check for patterns like "rename X to Y" or "rename X.html to Y.html"
+        # Check for patterns like "rename X to Y" or "rename X.html to Y.html" 
+        # But make sure they're actually file operations, not content changes
         rename_patterns = [
-            r'rename\s+[\w.-]+\s+to\s+[\w.-]+',
-            r'rename\s+[\w.-]+\.[\w]+\s+to\s+[\w.-]+\.[\w]+',
-            r'change\s+[\w.-]+\s+to\s+[\w.-]+',
-            r'move\s+[\w.-]+\s+to\s+[\w.-]+',
+            r'rename\s+[\w.-]+\.[\w]+\s+to\s+[\w.-]+\.[\w]+',  # Must have file extension
+            r'rename\s+file\s+[\w.-]+\s+to\s+[\w.-]+',         # Must mention "file"
+            r'move\s+[\w.-]+\.[\w]+\s+to\s+[\w.-]+',           # Must have file extension
+            r'move\s+file\s+[\w.-]+\s+to\s+[\w.-]+',           # Must mention "file"
         ]
         
         # Check direct keywords
