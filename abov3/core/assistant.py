@@ -1148,10 +1148,15 @@ Please provide the complete modified file content(s) with the requested changes.
                     if not file_to_delete:
                         return f"❌ File '{file_name}' not found in project directory."
                     
-                    # Perform the deletion
-                    file_to_delete.unlink()
-                    
-                    return f"✅ Successfully deleted `{file_name}`"
+                    # Check if this is a confirmation (user said yes/confirm/proceed etc)
+                    if any(word in user_input_lower for word in ['yes', 'confirm', 'proceed', 'continue']):
+                        # Perform the deletion
+                        file_to_delete.unlink()
+                        return f"✅ Successfully deleted `{file_name}`"
+                    else:
+                        # Ask for confirmation first
+                        relative_path = file_to_delete.relative_to(project_path)
+                        return f"⚠️  **DELETION CONFIRMATION REQUIRED**\n\n📁 File to delete: `{relative_path}`\n🗂️  Full path: `{file_to_delete}`\n\n**This action cannot be undone!**\n\n❓ Are you sure you want to delete this file?\n\n💭 Reply with **'yes delete {file_name}'** or **'confirm delete {file_name}'** to proceed.\n💭 Reply with anything else to cancel."
             
             # Handle copy operations
             copy_match = re.search(r'(?:copy|duplicate)\s+([\w.-]+(?:\.[\w]+)?)\s+(?:to\s+|as\s+)?([\w.-]+(?:\.[\w]+)?)', user_input_lower)
@@ -1669,6 +1674,7 @@ Please provide a comprehensive explanation of what this project does, how it wor
                 analysis = generation_result.get('analysis', {})
                 architecture = generation_result.get('architecture', {})
                 files = generation_result.get('generated_files', [])
+                setup_result = generation_result.get('setup_result', {})
                 next_steps = generation_result.get('next_steps', [])
                 
                 response_parts = [
@@ -1711,6 +1717,37 @@ Please provide a comprehensive explanation of what this project does, how it wor
                     f"📁 **Files Generated:** {len(files)} files",
                     ""
                 ])
+                
+                # Add environment setup results
+                if setup_result:
+                    response_parts.append("🔧 **Environment Setup:**")
+                    
+                    # Show installation logs
+                    if setup_result.get('installation_logs'):
+                        for log in setup_result['installation_logs'][:5]:  # Show first 5 logs
+                            response_parts.append(f"{log}")
+                        if len(setup_result['installation_logs']) > 5:
+                            response_parts.append(f"... and {len(setup_result['installation_logs']) - 5} more setup steps")
+                    
+                    # Show setup commands
+                    if setup_result.get('setup_commands'):
+                        response_parts.extend([
+                            "",
+                            "🚀 **Ready to Run:**"
+                        ])
+                        for cmd in setup_result['setup_commands']:
+                            response_parts.append(f"```bash\n{cmd}\n```")
+                    
+                    # Show errors if any
+                    if setup_result.get('errors'):
+                        response_parts.extend([
+                            "",
+                            "⚠️ **Setup Issues:**"
+                        ])
+                        for error in setup_result['errors'][:3]:  # Show first 3 errors
+                            response_parts.append(f"- {error}")
+                    
+                    response_parts.append("")
                 
                 # Add deployment info
                 deployment = generation_result.get('deployment', {})

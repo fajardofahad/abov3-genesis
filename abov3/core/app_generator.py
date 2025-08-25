@@ -85,12 +85,15 @@ class FullApplicationGenerator:
             # Step 3: Generate all components
             generation_result = await self._generate_application_components(architecture)
             
-            # Step 4: Create deployment configurations (only if requested)
+            # Step 4: Install dependencies and setup environment
+            setup_result = await self._setup_development_environment(architecture)
+            
+            # Step 5: Create deployment configurations (only if requested)
             deployment_config = {}
             if self._should_create_deployment_config(description, preferences):
                 deployment_config = await self._create_deployment_config(architecture)
             
-            # Step 5: Generate documentation
+            # Step 6: Generate documentation
             documentation = await self._generate_documentation(architecture, generation_result)
             
             return {
@@ -98,6 +101,7 @@ class FullApplicationGenerator:
                 'analysis': analysis,
                 'architecture': architecture,
                 'generated_files': generation_result.get('files', []),
+                'setup_result': setup_result,
                 'deployment': deployment_config,
                 'documentation': documentation,
                 'next_steps': self._get_next_steps(architecture)
@@ -2111,11 +2115,11 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/app', {
 });
 
 mongoose.connection.on('connected', () => {
-  console.log('✅ Connected to MongoDB');
+  console.log('[OK] Connected to MongoDB');
 });
 
 mongoose.connection.on('error', (err) => {
-  console.error('❌ MongoDB connection error:', err);
+  console.error('[ERROR] MongoDB connection error:', err);
 });"""
         
         return f"""const express = require('express');
@@ -2620,3 +2624,295 @@ body {
             global_css,
             'Global CSS styles'
         )
+    
+    async def _setup_development_environment(self, architecture: Dict[str, Any]) -> Dict[str, Any]:
+        """Setup the complete development environment with dependency installation"""
+        setup_result = {
+            'dependencies_installed': False,
+            'environment_configured': False,
+            'database_setup': False,
+            'dev_servers_ready': False,
+            'installation_logs': [],
+            'setup_commands': [],
+            'errors': []
+        }
+        
+        try:
+            tech_stack = architecture.get('tech_stack', 'html_css_js')
+            
+            print(f"[DEBUG] Setting up development environment for {tech_stack}")
+            
+            if tech_stack == 'react_node_mongodb':
+                await self._setup_react_node_environment(architecture, setup_result)
+            elif tech_stack == 'html_css_js_backend':
+                await self._setup_html_backend_environment(architecture, setup_result)
+            elif tech_stack == 'flutter':
+                await self._setup_flutter_environment(architecture, setup_result)
+            elif tech_stack == 'fastapi_python':
+                await self._setup_python_environment(architecture, setup_result)
+            else:
+                # Static website - no dependencies to install
+                setup_result['dependencies_installed'] = True
+                setup_result['dev_servers_ready'] = True
+                setup_result['installation_logs'].append("Static website - no dependencies required")
+            
+            return setup_result
+            
+        except Exception as e:
+            setup_result['errors'].append(f"Environment setup failed: {str(e)}")
+            print(f"[DEBUG] Environment setup error: {e}")
+            return setup_result
+    
+    async def _setup_react_node_environment(self, architecture: Dict[str, Any], setup_result: Dict[str, Any]):
+        """Setup React + Node.js development environment"""
+        import asyncio
+        import subprocess
+        import os
+        
+        try:
+            project_path = self.project_path
+            
+            # Check if Node.js is available
+            try:
+                node_version = await self._run_command(['node', '--version'])
+                npm_version = await self._run_command(['npm', '--version'])
+                setup_result['installation_logs'].append(f"[OK] Node.js: {node_version.strip()}")
+                setup_result['installation_logs'].append(f"[OK] npm: {npm_version.strip()}")
+            except Exception:
+                setup_result['errors'].append("[ERROR] Node.js not found. Please install Node.js first.")
+                return
+            
+            # Install frontend dependencies
+            frontend_path = project_path / 'frontend'
+            if frontend_path.exists():
+                setup_result['installation_logs'].append("[INSTALL] Installing frontend dependencies...")
+                try:
+                    # Check if package.json exists
+                    package_json = frontend_path / 'package.json'
+                    if package_json.exists():
+                        install_output = await self._run_command(['npm', 'install'], cwd=str(frontend_path))
+                        setup_result['installation_logs'].append("[OK] Frontend dependencies installed")
+                        
+                        # Create React App if using Create React App
+                        if not (frontend_path / 'src').exists():
+                            setup_result['installation_logs'].append("[INIT] Initializing React app structure...")
+                            await self._run_command(['npx', 'create-react-app', '.'], cwd=str(frontend_path))
+                        
+                except Exception as e:
+                    setup_result['errors'].append(f"[ERROR] Frontend installation failed: {str(e)}")
+            
+            # Install backend dependencies
+            backend_path = project_path / 'backend'
+            if backend_path.exists():
+                setup_result['installation_logs'].append("[INSTALL] Installing backend dependencies...")
+                try:
+                    package_json = backend_path / 'package.json'
+                    if package_json.exists():
+                        install_output = await self._run_command(['npm', 'install'], cwd=str(backend_path))
+                        setup_result['installation_logs'].append("[OK] Backend dependencies installed")
+                except Exception as e:
+                    setup_result['errors'].append(f"[ERROR] Backend installation failed: {str(e)}")
+            
+            # Setup environment variables
+            await self._setup_environment_variables(architecture, setup_result)
+            
+            # Check MongoDB availability
+            await self._setup_mongodb_environment(architecture, setup_result)
+            
+            if not setup_result['errors']:
+                setup_result['dependencies_installed'] = True
+                setup_result['dev_servers_ready'] = True
+                setup_result['setup_commands'] = [
+                    "cd backend && npm run dev",
+                    "cd frontend && npm start"
+                ]
+            
+        except Exception as e:
+            setup_result['errors'].append(f"React/Node setup failed: {str(e)}")
+    
+    async def _setup_flutter_environment(self, architecture: Dict[str, Any], setup_result: Dict[str, Any]):
+        """Setup Flutter development environment"""
+        try:
+            # Check Flutter installation
+            try:
+                flutter_version = await self._run_command(['flutter', '--version'])
+                setup_result['installation_logs'].append("[OK] Flutter installed")
+                
+                # Run flutter doctor
+                doctor_output = await self._run_command(['flutter', 'doctor'])
+                setup_result['installation_logs'].append("[CHECK] Flutter doctor completed")
+                
+                # Get dependencies
+                pub_output = await self._run_command(['flutter', 'pub', 'get'], cwd=str(self.project_path))
+                setup_result['installation_logs'].append("[OK] Flutter dependencies installed")
+                
+                setup_result['dependencies_installed'] = True
+                setup_result['dev_servers_ready'] = True
+                setup_result['setup_commands'] = ["flutter run"]
+                
+            except Exception:
+                setup_result['errors'].append("[ERROR] Flutter not found. Please install Flutter SDK first.")
+                
+        except Exception as e:
+            setup_result['errors'].append(f"Flutter setup failed: {str(e)}")
+    
+    async def _setup_python_environment(self, architecture: Dict[str, Any], setup_result: Dict[str, Any]):
+        """Setup Python/FastAPI development environment"""
+        try:
+            # Check Python installation
+            try:
+                python_version = await self._run_command(['python', '--version'])
+                setup_result['installation_logs'].append(f"[OK] Python: {python_version.strip()}")
+            except Exception:
+                try:
+                    python_version = await self._run_command(['python3', '--version'])
+                    setup_result['installation_logs'].append(f"[OK] Python3: {python_version.strip()}")
+                except Exception:
+                    setup_result['errors'].append("[ERROR] Python not found. Please install Python first.")
+                    return
+            
+            # Create virtual environment
+            venv_path = self.project_path / 'venv'
+            if not venv_path.exists():
+                setup_result['installation_logs'].append("[SETUP] Creating virtual environment...")
+                await self._run_command(['python', '-m', 'venv', 'venv'], cwd=str(self.project_path))
+                setup_result['installation_logs'].append("[OK] Virtual environment created")
+            
+            # Install requirements
+            requirements_file = self.project_path / 'requirements.txt'
+            if requirements_file.exists():
+                setup_result['installation_logs'].append("[INSTALL] Installing Python dependencies...")
+                pip_cmd = str(venv_path / 'Scripts' / 'pip') if os.name == 'nt' else str(venv_path / 'bin' / 'pip')
+                await self._run_command([pip_cmd, 'install', '-r', 'requirements.txt'], cwd=str(self.project_path))
+                setup_result['installation_logs'].append("[OK] Python dependencies installed")
+            
+            setup_result['dependencies_installed'] = True
+            setup_result['dev_servers_ready'] = True
+            setup_result['setup_commands'] = ["uvicorn main:app --reload"]
+            
+        except Exception as e:
+            setup_result['errors'].append(f"Python setup failed: {str(e)}")
+    
+    async def _setup_html_backend_environment(self, architecture: Dict[str, Any], setup_result: Dict[str, Any]):
+        """Setup HTML + Backend environment"""
+        # Similar to React setup but simpler
+        try:
+            backend_path = self.project_path / 'backend'
+            if backend_path.exists():
+                setup_result['installation_logs'].append("[INSTALL] Installing backend dependencies...")
+                package_json = backend_path / 'package.json'
+                if package_json.exists():
+                    await self._run_command(['npm', 'install'], cwd=str(backend_path))
+                    setup_result['installation_logs'].append("[OK] Backend dependencies installed")
+            
+            setup_result['dependencies_installed'] = True
+            setup_result['dev_servers_ready'] = True
+            setup_result['setup_commands'] = [
+                "cd backend && npm run dev",
+                "python -m http.server 8000  # For frontend"
+            ]
+            
+        except Exception as e:
+            setup_result['errors'].append(f"HTML/Backend setup failed: {str(e)}")
+    
+    async def _setup_environment_variables(self, architecture: Dict[str, Any], setup_result: Dict[str, Any]):
+        """Setup environment variables for the application"""
+        try:
+            backend_path = self.project_path / 'backend'
+            if backend_path.exists():
+                env_file = backend_path / '.env'
+                
+                # Create .env file with default values
+                env_content = []
+                env_content.append("# Database Configuration")
+                env_content.append("MONGODB_URI=mongodb://localhost:27017/app")
+                env_content.append("")
+                env_content.append("# JWT Configuration")
+                env_content.append("JWT_SECRET=your-super-secret-jwt-key-change-this-in-production")
+                env_content.append("")
+                env_content.append("# Server Configuration")
+                env_content.append("PORT=5000")
+                env_content.append("NODE_ENV=development")
+                
+                # Add feature-specific environment variables
+                features = architecture.get('features', [])
+                if 'shopping_cart' in features or 'payment' in features:
+                    env_content.append("")
+                    env_content.append("# Payment Configuration (Stripe)")
+                    env_content.append("STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here")
+                    env_content.append("STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here")
+                
+                if 'email' in features or 'notifications' in features:
+                    env_content.append("")
+                    env_content.append("# Email Configuration")
+                    env_content.append("SMTP_HOST=smtp.gmail.com")
+                    env_content.append("SMTP_PORT=587")
+                    env_content.append("SMTP_USER=your-email@gmail.com")
+                    env_content.append("SMTP_PASS=your-app-password")
+                
+                # Write .env file
+                with open(env_file, 'w') as f:
+                    f.write('\n'.join(env_content))
+                
+                setup_result['installation_logs'].append("[OK] Environment variables configured (.env file created)")
+                setup_result['environment_configured'] = True
+                
+        except Exception as e:
+            setup_result['errors'].append(f"Environment variables setup failed: {str(e)}")
+    
+    async def _setup_mongodb_environment(self, architecture: Dict[str, Any], setup_result: Dict[str, Any]):
+        """Check and setup MongoDB if needed"""
+        try:
+            features = architecture.get('features', [])
+            app_type = architecture.get('app_type', '')
+            
+            # Check if MongoDB is needed
+            if 'database' in features or app_type in ['ecommerce', 'restaurant']:
+                # Try to connect to MongoDB
+                try:
+                    # Check if MongoDB is running
+                    mongo_check = await self._run_command(['mongosh', '--eval', 'db.runCommand("ping").ok'], timeout=5)
+                    if '1' in mongo_check:
+                        setup_result['installation_logs'].append("[OK] MongoDB is running and accessible")
+                        setup_result['database_setup'] = True
+                    else:
+                        setup_result['installation_logs'].append("[WARN] MongoDB found but may not be running")
+                        setup_result['installation_logs'].append("[INFO] Start MongoDB with: mongod or brew services start mongodb-community")
+                except Exception:
+                    # Try alternative MongoDB check
+                    try:
+                        mongo_version = await self._run_command(['mongo', '--version'], timeout=5)
+                        setup_result['installation_logs'].append("[OK] MongoDB installed")
+                        setup_result['installation_logs'].append("[INFO] Start MongoDB with: mongod")
+                    except Exception:
+                        setup_result['installation_logs'].append("[WARN] MongoDB not found or not running")
+                        setup_result['installation_logs'].append("[INFO] Install MongoDB: https://www.mongodb.com/try/download/community")
+                        setup_result['errors'].append("MongoDB is required but not accessible")
+            else:
+                setup_result['database_setup'] = True  # Not needed
+                
+        except Exception as e:
+            setup_result['errors'].append(f"MongoDB setup check failed: {str(e)}")
+    
+    async def _run_command(self, command: List[str], cwd: str = None, timeout: int = 30) -> str:
+        """Run a command asynchronously and return output"""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            
+            if process.returncode == 0:
+                return stdout.decode('utf-8')
+            else:
+                error_msg = stderr.decode('utf-8')
+                raise Exception(f"Command failed: {' '.join(command)}\n{error_msg}")
+                
+        except asyncio.TimeoutError:
+            raise Exception(f"Command timed out: {' '.join(command)}")
+        except Exception as e:
+            raise Exception(f"Command execution failed: {str(e)}")
