@@ -602,15 +602,25 @@ I'm still here to help with manual guidance and project management!"""
             return f"❌ Code generation is not available. Debug info - Project path: {project_path}, Code generator: {self.code_generator is not None}"
         
         try:
-            # Check if this is a modification request for existing files
-            is_modification_request = any(word in user_input.lower() for word in [
-                'update', 'modify', 'change', 'edit', 'fix', 'make', 'set', 'color', 'style', 'add'
+            from pathlib import Path
+            project_path = Path(self.code_generator.project_path)
+            
+            # Check if project has existing files
+            existing_files = []
+            for file_path in project_path.rglob('*'):
+                if file_path.is_file() and file_path.suffix in ['.html', '.css', '.js', '.py', '.md', '.txt']:
+                    existing_files.append(file_path)
+            
+            # If no existing files OR this is clearly a "make/create" request, do new file creation
+            is_creation_request = any(phrase in user_input.lower() for phrase in [
+                'make me', 'create', 'build', 'generate', 'new website', 'new app'
             ])
             
-            if is_modification_request:
-                return await self._handle_file_modification(user_input, messages, model)
-            else:
+            if not existing_files or is_creation_request:
                 return await self._handle_new_file_creation(user_input, messages, model)
+            else:
+                # Has existing files and looks like a modification
+                return await self._handle_file_modification(user_input, messages, model)
                 
         except Exception as e:
             return f"❌ Error during code generation: {str(e)}"
@@ -1577,12 +1587,16 @@ Please provide a comprehensive explanation of what this project does, how it wor
             'complete website', 'complete application', 'complete app',
             'entire website', 'entire application', 'entire app',
             'full stack', 'end to end', 'production ready',
-            'from scratch', 'ground up'
+            'from scratch', 'ground up',
+            'yes i want it all', 'give me all', 'add everything', 'include everything',
+            'full featured', 'with all features', 'complete solution'
         ]
         
         # Business/domain specific requests that typically need full apps
         business_app_patterns = [
             'coffee shop website', 'restaurant website', 'e-commerce', 'online store',
+            'bobba tea shop', 'boba tea shop', 'tea shop website', 'cafe website',
+            'bakery website', 'food website', 'drinks website', 'beverage website',
             'portfolio website', 'business website', 'company website',
             'blog website', 'news website', 'social media app',
             'todo app', 'chat app', 'calendar app', 'note taking app',

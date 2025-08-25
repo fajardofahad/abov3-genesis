@@ -134,7 +134,7 @@ class FullApplicationGenerator:
             analysis['target_platform'] = 'web'
             
             # Determine website category (prioritize restaurant/cafe over ecommerce)
-            if any(word in description_lower for word in ['restaurant', 'cafe', 'coffee', 'food', 'menu', 'dining']):
+            if any(word in description_lower for word in ['restaurant', 'cafe', 'coffee', 'food', 'menu', 'dining', 'tea', 'bobba', 'boba', 'drinks', 'beverage']):
                 analysis['app_type'] = 'restaurant'
                 analysis['category'] = 'business'
                 analysis['complexity'] = 'medium'
