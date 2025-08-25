@@ -1,5 +1,5 @@
 # ABOV3 Genesis - From Idea to Built Reality
-# Core dependencies for AI-powered coding assistant
+# Enterprise-grade AI-powered coding assistant with robust infrastructure
 
 # AI and LLM Integration
 ollama>=0.2.0              # Ollama client for local AI models
@@ -15,13 +15,34 @@ click>=8.1.0               # Command-line interface framework
 # Configuration and Data
 pyyaml>=6.0.0              # YAML configuration files
 jinja2>=3.1.0              # Template engine for code generation
+toml>=0.10.0               # TOML configuration support
 
 # Async File Operations
 aiofiles>=23.0.0           # Async file I/O operations
 
-# System Utilities
-psutil>=5.9.0              # System and process utilities
+# HTTP Client and Networking
+aiohttp>=3.8.0             # Async HTTP client for API calls
+httpx>=0.24.0              # Alternative HTTP client with better error handling
+
+# System Utilities and Monitoring
+psutil>=5.9.0              # System and process utilities for monitoring
 gitpython>=3.1.0           # Git integration
+
+# Infrastructure and Deployment
+packaging>=21.0            # Version parsing and requirements handling
+docker>=6.0.0              # Docker SDK for containerization
+kubernetes>=26.0.0         # Kubernetes client library
+
+# Performance and Caching
+redis>=4.5.0               # Redis client for distributed caching (optional)
+memcache>=0.9.0            # Memcached client (optional)
+
+# Resilience and Circuit Breakers
+circuitbreaker>=1.4.0      # Circuit breaker pattern implementation
+
+# Metrics and Monitoring
+prometheus-client>=0.16.0  # Prometheus metrics client
+structlog>=23.0.0          # Structured logging
 
 # Optional Development Dependencies
 # Install with: pip install abov3-genesis[dev]

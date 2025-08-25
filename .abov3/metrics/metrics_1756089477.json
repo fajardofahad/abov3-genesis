@@ -1,0 +1,283 @@
+{
+  "timestamp": 1756089477.018303,
+  "metrics": [
+    {
+      "name": "system.cpu.usage_percent",
+      "type": "gauge",
+      "value": 9.5,
+      "timestamp": 1756089471.0334876,
+      "iso_timestamp": "2025-08-25T02:37:51.033488+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.cpu.count",
+      "type": "gauge",
+      "value": 16,
+      "timestamp": 1756089471.0335026,
+      "iso_timestamp": "2025-08-25T02:37:51.033503+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.memory.total",
+      "type": "gauge",
+      "value": 33722585088,
+      "timestamp": 1756089471.0413241,
+      "iso_timestamp": "2025-08-25T02:37:51.041324+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.memory.used",
+      "type": "gauge",
+      "value": 8633761792,
+      "timestamp": 1756089471.0413332,
+      "iso_timestamp": "2025-08-25T02:37:51.041333+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.memory.available",
+      "type": "gauge",
+      "value": 25088823296,
+      "timestamp": 1756089471.0413356,
+      "iso_timestamp": "2025-08-25T02:37:51.041336+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.memory.usage_percent",
+      "type": "gauge",
+      "value": 25.6,
+      "timestamp": 1756089471.0413382,
+      "iso_timestamp": "2025-08-25T02:37:51.041338+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.total",
+      "type": "gauge",
+      "value": 999267045376,
+      "timestamp": 1756089471.0414793,
+      "iso_timestamp": "2025-08-25T02:37:51.041479+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.used",
+      "type": "gauge",
+      "value": 674762067968,
+      "timestamp": 1756089471.0414834,
+      "iso_timestamp": "2025-08-25T02:37:51.041483+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.free",
+      "type": "gauge",
+      "value": 324504977408,
+      "timestamp": 1756089471.0414858,
+      "iso_timestamp": "2025-08-25T02:37:51.041486+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.usage_percent",
+      "type": "gauge",
+      "value": 67.5257000709058,
+      "timestamp": 1756089471.0414884,
+      "iso_timestamp": "2025-08-25T02:37:51.041488+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.network.bytes_sent",
+      "type": "gauge",
+      "value": 3029318130,
+      "timestamp": 1756089471.0492485,
+      "iso_timestamp": "2025-08-25T02:37:51.049248+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.network.bytes_recv",
+      "type": "gauge",
+      "value": 118249315207,
+      "timestamp": 1756089471.0492558,
+      "iso_timestamp": "2025-08-25T02:37:51.049256+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.network.packets_sent",
+      "type": "gauge",
+      "value": 31988321,
+      "timestamp": 1756089471.0492597,
+      "iso_timestamp": "2025-08-25T02:37:51.049260+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.network.packets_recv",
+      "type": "gauge",
+      "value": 82974454,
+      "timestamp": 1756089471.0492628,
+      "iso_timestamp": "2025-08-25T02:37:51.049263+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.network.bytes_sent_per_sec",
+      "type": "gauge",
+      "value": 25736.4,
+      "timestamp": 1756089471.0492663,
+      "iso_timestamp": "2025-08-25T02:37:51.049266+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.network.bytes_recv_per_sec",
+      "type": "gauge",
+      "value": 22648.6,
+      "timestamp": 1756089471.0492687,
+      "iso_timestamp": "2025-08-25T02:37:51.049269+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.read_bytes",
+      "type": "gauge",
+      "value": 1426224526336,
+      "timestamp": 1756089471.0494115,
+      "iso_timestamp": "2025-08-25T02:37:51.049412+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.write_bytes",
+      "type": "gauge",
+      "value": 747010513408,
+      "timestamp": 1756089471.0494165,
+      "iso_timestamp": "2025-08-25T02:37:51.049417+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.read_count",
+      "type": "gauge",
+      "value": 21803617,
+      "timestamp": 1756089471.0494192,
+      "iso_timestamp": "2025-08-25T02:37:51.049419+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.write_count",
+      "type": "gauge",
+      "value": 7967520,
+      "timestamp": 1756089471.0494215,
+      "iso_timestamp": "2025-08-25T02:37:51.049422+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.read_bytes_per_sec",
+      "type": "gauge",
+      "value": 264601.6,
+      "timestamp": 1756089471.0494244,
+      "iso_timestamp": "2025-08-25T02:37:51.049424+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "system.disk.write_bytes_per_sec",
+      "type": "gauge",
+      "value": 406323.2,
+      "timestamp": 1756089471.0494263,
+      "iso_timestamp": "2025-08-25T02:37:51.049426+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "process.cpu.usage_percent",
+      "type": "gauge",
+      "value": 0.0,
+      "timestamp": 1756089471.0494728,
+      "iso_timestamp": "2025-08-25T02:37:51.049473+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "process.memory.rss",
+      "type": "gauge",
+      "value": 56016896,
+      "timestamp": 1756089471.0494928,
+      "iso_timestamp": "2025-08-25T02:37:51.049493+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "process.memory.vms",
+      "type": "gauge",
+      "value": 31830016,
+      "timestamp": 1756089471.0494957,
+      "iso_timestamp": "2025-08-25T02:37:51.049496+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "process.memory.percent",
+      "type": "gauge",
+      "value": 0.16611091899930683,
+      "timestamp": 1756089471.049509,
+      "iso_timestamp": "2025-08-25T02:37:51.049509+00:00",
+      "tags": {},
+      "unit": null
+    },
+    {
+      "name": "process.threads",
+      "type": "gauge",
+      "value": 13,
+      "timestamp": 1756089471.0570097,
+      "iso_timestamp": "2025-08-25T02:37:51.057010+00:00",
+      "tags": {},
+      "unit": null
+    }
+  ],
+  "aggregations": {
+    "counters": {},
+    "gauges": {
+      "system.cpu.usage_percent": 9.5,
+      "system.cpu.count": 16,
+      "system.memory.total": 33722585088,
+      "system.memory.used": 8633761792,
+      "system.memory.available": 25088823296,
+      "system.memory.usage_percent": 25.6,
+      "system.disk.total": 999267045376,
+      "system.disk.used": 674762067968,
+      "system.disk.free": 324504977408,
+      "system.disk.usage_percent": 67.5257000709058,
+      "system.network.bytes_sent": 3029318130,
+      "system.network.bytes_recv": 118249315207,
+      "system.network.packets_sent": 31988321,
+      "system.network.packets_recv": 82974454,
+      "system.disk.read_bytes": 1426224526336,
+      "system.disk.write_bytes": 747010513408,
+      "system.disk.read_count": 21803617,
+      "system.disk.write_count": 7967520,
+      "process.cpu.usage_percent": 0.0,
+      "process.memory.rss": 56016896,
+      "process.memory.vms": 31830016,
+      "process.memory.percent": 0.16611091899930683,
+      "process.threads": 13,
+      "system.network.bytes_sent_per_sec": 25736.4,
+      "system.network.bytes_recv_per_sec": 22648.6,
+      "system.disk.read_bytes_per_sec": 264601.6,
+      "system.disk.write_bytes_per_sec": 406323.2
+    },
+    "histograms": {},
+    "timers": {},
+    "sets": {}
+  }
+}

@@ -328,39 +328,112 @@ class OllamaClient:
         
         return None
     
-    def get_genesis_optimized_options(self, task_type: str = "general") -> Dict[str, Any]:
-        """Get optimized options for different Genesis tasks"""
+    def get_genesis_optimized_options(self, task_type: str = "general", model_name: str = None) -> Dict[str, Any]:
+        """Get optimized options for different Genesis tasks and models"""
+        # Base options optimized for code generation quality
         base_options = {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "top_k": 40,
-            "repeat_penalty": 1.1
+            "temperature": 0.1,
+            "top_p": 0.95,
+            "top_k": 50,
+            "repeat_penalty": 1.02,
+            "num_predict": -1,  # No limit on prediction length
+            "stop": ["<|endoftext|>", "<|end|>", "Human:", "User:"],
+            "seed": -1  # Random seed for variety
         }
         
+        # Task-specific optimizations based on research and testing
         task_optimizations = {
             "code_generation": {
-                "temperature": 0.2,
+                "temperature": 0.1,  # Very low for deterministic code
                 "top_p": 0.95,
+                "top_k": 40,
+                "repeat_penalty": 1.0,  # No penalty for code patterns
+                "mirostat": 2,  # Enable mirostat for better coherence
+                "mirostat_tau": 5.0,
+                "mirostat_eta": 0.1
+            },
+            "code_review": {
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "top_k": 30,
+                "repeat_penalty": 1.1
+            },
+            "debugging": {
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "top_k": 40,
                 "repeat_penalty": 1.0
             },
-            "creative_writing": {
-                "temperature": 0.9,
+            "architecture_design": {
+                "temperature": 0.3,
                 "top_p": 0.9,
+                "top_k": 50,
+                "repeat_penalty": 1.1
+            },
+            "explanation": {
+                "temperature": 0.4,
+                "top_p": 0.9,
+                "top_k": 50,
                 "repeat_penalty": 1.2
             },
+            "creative_writing": {
+                "temperature": 0.8,
+                "top_p": 0.9,
+                "top_k": 80,
+                "repeat_penalty": 1.3
+            },
             "analysis": {
-                "temperature": 0.3,
+                "temperature": 0.2,
                 "top_p": 0.85,
+                "top_k": 30,
                 "repeat_penalty": 1.1
             },
             "conversation": {
-                "temperature": 0.7,
+                "temperature": 0.6,
                 "top_p": 0.9,
+                "top_k": 60,
                 "repeat_penalty": 1.1
             }
         }
         
+        # Model-specific optimizations
+        model_optimizations = {
+            "codellama": {
+                "temperature": 0.05,  # Extremely low for best code quality
+                "top_k": 20,
+                "repeat_penalty": 0.95  # Allow code repetition
+            },
+            "deepseek-coder": {
+                "temperature": 0.1,
+                "top_p": 0.98,
+                "repeat_penalty": 1.0
+            },
+            "starcoder": {
+                "temperature": 0.1,
+                "top_k": 30,
+                "repeat_penalty": 1.0
+            },
+            "llama3": {
+                "temperature": 0.2,
+                "mirostat": 1,
+                "mirostat_tau": 3.0
+            },
+            "qwen": {
+                "temperature": 0.15,
+                "top_p": 0.95,
+                "top_k": 35
+            }
+        }
+        
+        # Apply task optimizations
         if task_type in task_optimizations:
             base_options.update(task_optimizations[task_type])
+        
+        # Apply model-specific optimizations
+        if model_name:
+            for model_key, opts in model_optimizations.items():
+                if model_key.lower() in model_name.lower():
+                    base_options.update(opts)
+                    break
         
         return base_options
