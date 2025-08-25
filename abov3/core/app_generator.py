@@ -285,29 +285,52 @@ class FullApplicationGenerator:
         }
     
     async def _plan_restaurant_architecture(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Plan restaurant website architecture"""
-        return {
-            'pages': ['home', 'menu', 'about', 'contact', 'reservations', 'order'],
-            'components': [
-                'MenuItem', 'Navigation', 'Footer', 'ReservationForm', 
-                'OrderCart', 'MenuCategory', 'ContactForm'
-            ],
-            'file_structure': {
-                'src/pages/': ['HomePage.js', 'MenuPage.js', 'AboutPage.js', 'ContactPage.js', 'ReservationsPage.js'],
-                'src/components/': ['MenuItem.js', 'Navigation.js', 'Footer.js', 'ReservationForm.js'],
-                'src/data/': ['menu.js', 'restaurant-info.js'],
-                'src/styles/': ['global.css', 'components.css', 'pages.css'],
-                'assets/images/': ['logo.png', 'hero-bg.jpg', 'menu-items/']
-            },
-            'dependencies': {
-                'frontend': ['react', 'react-router-dom', 'react-datepicker', 'emailjs-com']
-            },
-            'database_schema': {
-                'menu_items': ['id', 'name', 'description', 'price', 'category', 'image', 'available'],
-                'reservations': ['id', 'name', 'email', 'phone', 'date', 'time', 'party_size', 'special_requests'],
-                'orders': ['id', 'customer_info', 'items', 'total', 'status', 'order_type']
+        """Plan restaurant website architecture based on chosen tech stack"""
+        tech_stack = analysis.get('tech_stack', 'html_css_js')
+        
+        # Base pages and components for restaurants
+        pages = ['home', 'menu', 'about', 'contact', 'reservations', 'order']
+        components = [
+            'MenuItem', 'Navigation', 'Footer', 'ReservationForm', 
+            'OrderCart', 'MenuCategory', 'ContactForm'
+        ]
+        
+        if tech_stack == 'html_css_js':
+            # Static HTML website structure
+            return {
+                'pages': pages,
+                'components': components,
+                'file_structure': {
+                    'pages': ['index.html', 'menu.html', 'about.html', 'contact.html', 'reservations.html', 'order.html'],
+                    'styles/': ['main.css', 'menu.css', 'forms.css'],
+                    'scripts/': ['main.js', 'menu.js', 'forms.js'],
+                    'images/': ['logo.png', 'hero-bg.jpg', 'menu-items/']
+                },
+                'dependencies': {
+                    'frontend': []  # No dependencies for static HTML
+                }
             }
-        }
+        else:
+            # React website structure for complex restaurants
+            return {
+                'pages': pages,
+                'components': components,
+                'file_structure': {
+                    'src/pages/': ['HomePage.js', 'MenuPage.js', 'AboutPage.js', 'ContactPage.js', 'ReservationsPage.js'],
+                    'src/components/': ['MenuItem.js', 'Navigation.js', 'Footer.js', 'ReservationForm.js'],
+                    'src/data/': ['menu.js', 'restaurant-info.js'],
+                    'src/styles/': ['global.css', 'components.css', 'pages.css'],
+                    'assets/images/': ['logo.png', 'hero-bg.jpg', 'menu-items/']
+                },
+                'dependencies': {
+                    'frontend': ['react', 'react-router-dom', 'react-datepicker', 'emailjs-com']
+                },
+                'database_schema': {
+                    'menu_items': ['id', 'name', 'description', 'price', 'category', 'image', 'available'],
+                    'reservations': ['id', 'name', 'email', 'phone', 'date', 'time', 'party_size', 'special_requests'],
+                    'orders': ['id', 'customer_info', 'items', 'total', 'status', 'order_type']
+                }
+            }
     
     async def _plan_portfolio_architecture(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Plan portfolio website architecture"""
@@ -734,6 +757,180 @@ const HomePage = () => {
 };
 
 export default HomePage;"""
+    
+    def _generate_menu_page_react(self) -> str:
+        """Generate React menu page for restaurant"""
+        return """import React from 'react';
+
+const MenuPage = () => {
+  return (
+    <div className="menu-page">
+      <div className="container">
+        <h1>Our Menu</h1>
+        <div className="menu-categories">
+          <div className="menu-category">
+            <h2>Coffee & Espresso</h2>
+            <div className="menu-items">
+              <div className="menu-item">
+                <h3>Americano <span className="price">$3.50</span></h3>
+                <p>Rich espresso with hot water</p>
+              </div>
+              <div className="menu-item">
+                <h3>Latte <span className="price">$4.50</span></h3>
+                <p>Espresso with steamed milk and foam</p>
+              </div>
+              <div className="menu-item">
+                <h3>Cappuccino <span className="price">$4.00</span></h3>
+                <p>Equal parts espresso, steamed milk, and foam</p>
+              </div>
+            </div>
+          </div>
+          <div className="menu-category">
+            <h2>Pastries & Snacks</h2>
+            <div className="menu-items">
+              <div className="menu-item">
+                <h3>Croissant <span className="price">$2.50</span></h3>
+                <p>Fresh baked buttery croissant</p>
+              </div>
+              <div className="menu-item">
+                <h3>Muffin <span className="price">$3.00</span></h3>
+                <p>Blueberry or chocolate chip</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MenuPage;"""
+    
+    def _generate_about_page_react(self, app_type: str) -> str:
+        """Generate React about page"""
+        if app_type == 'restaurant':
+            return """import React from 'react';
+
+const AboutPage = () => {
+  return (
+    <div className="about-page">
+      <div className="container">
+        <h1>About Us</h1>
+        <div className="about-content">
+          <h2>Our Story</h2>
+          <p>Welcome to our coffee shop! We've been serving the community with exceptional coffee and warm hospitality since our founding.</p>
+          
+          <h2>Our Mission</h2>
+          <p>To create a welcoming space where people can enjoy expertly crafted coffee and meaningful connections.</p>
+          
+          <h2>What Makes Us Special</h2>
+          <ul>
+            <li>Locally sourced, ethically traded coffee beans</li>
+            <li>Fresh baked goods made daily</li>
+            <li>Experienced baristas who care about their craft</li>
+            <li>A warm, inviting atmosphere</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AboutPage;"""
+        else:
+            return """import React from 'react';
+
+const AboutPage = () => {
+  return (
+    <div className="about-page">
+      <div className="container">
+        <h1>About Us</h1>
+        <p>Learn more about our company and what we do.</p>
+      </div>
+    </div>
+  );
+};
+
+export default AboutPage;"""
+    
+    def _generate_contact_page_react(self) -> str:
+        """Generate React contact page"""
+        return """import React from 'react';
+
+const ContactPage = () => {
+  return (
+    <div className="contact-page">
+      <div className="container">
+        <h1>Contact Us</h1>
+        <div className="contact-content">
+          <div className="contact-info">
+            <h2>Get in Touch</h2>
+            <p><strong>Address:</strong> 123 Main Street, City, ST 12345</p>
+            <p><strong>Phone:</strong> (555) 123-4567</p>
+            <p><strong>Email:</strong> info@example.com</p>
+          </div>
+          <form className="contact-form">
+            <input type="text" placeholder="Your Name" required />
+            <input type="email" placeholder="Your Email" required />
+            <textarea placeholder="Your Message" rows="5" required></textarea>
+            <button type="submit">Send Message</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ContactPage;"""
+    
+    def _generate_products_page_react(self) -> str:
+        """Generate React products page for ecommerce"""
+        return """import React from 'react';
+
+const ProductsPage = () => {
+  return (
+    <div className="products-page">
+      <div className="container">
+        <h1>Our Products</h1>
+        <div className="products-grid">
+          <div className="product-card">
+            <h3>Product 1</h3>
+            <p>Description of product 1</p>
+            <span className="price">$29.99</span>
+            <button>Add to Cart</button>
+          </div>
+          <div className="product-card">
+            <h3>Product 2</h3>
+            <p>Description of product 2</p>
+            <span className="price">$39.99</span>
+            <button>Add to Cart</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProductsPage;"""
+    
+    def _generate_cart_page_react(self) -> str:
+        """Generate React cart page for ecommerce"""
+        return """import React from 'react';
+
+const CartPage = () => {
+  return (
+    <div className="cart-page">
+      <div className="container">
+        <h1>Shopping Cart</h1>
+        <div className="cart-items">
+          <p>Your cart is empty</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CartPage;"""
     
     def _generate_react_component(self, component: str, architecture: Dict[str, Any]) -> str:
         """Generate React components"""
