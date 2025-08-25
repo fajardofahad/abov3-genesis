@@ -85,8 +85,10 @@ class FullApplicationGenerator:
             # Step 3: Generate all components
             generation_result = await self._generate_application_components(architecture)
             
-            # Step 4: Create deployment configurations
-            deployment_config = await self._create_deployment_config(architecture)
+            # Step 4: Create deployment configurations (only if requested)
+            deployment_config = {}
+            if self._should_create_deployment_config(description, preferences):
+                deployment_config = await self._create_deployment_config(architecture)
             
             # Step 5: Generate documentation
             documentation = await self._generate_documentation(architecture, generation_result)
@@ -472,7 +474,7 @@ class FullApplicationGenerator:
             )
             result['components_created'] += 1
         
-        # Generate backend
+        # Generate backend package.json and server
         await self._generate_node_backend(architecture, result)
         
         # Generate styling
@@ -1734,21 +1736,28 @@ For support and questions, please open an issue in the repository.
 
 3. Install backend dependencies:
    ```bash
-   cd ../backend
+   cd backend
    npm install
    ```
 
 4. Set up environment variables:
    ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
+   cd backend
+   echo "MONGODB_URI=mongodb://localhost:27017/app" > .env
+   echo "JWT_SECRET=your-secret-key-here" >> .env
+   echo "PORT=5000" >> .env
    ```
 
-5. Start MongoDB service
-
-6. Initialize the database:
+5. Start MongoDB service (make sure MongoDB is installed and running)
    ```bash
-   npm run db:seed
+   # On Windows with MongoDB installed
+   net start MongoDB
+   
+   # On macOS with Homebrew
+   brew services start mongodb-community
+   
+   # On Linux
+   sudo systemctl start mongod
    ```"""
         
         elif tech_stack == 'flutter':
@@ -1822,10 +1831,12 @@ For support and questions, please open an issue in the repository.
             return """```bash
 # Terminal 1 - Backend
 cd backend
+npm install
 npm run dev
 
 # Terminal 2 - Frontend  
 cd frontend
+npm install
 npm start
 ```"""
         elif tech_stack == 'flutter':
@@ -1962,3 +1973,650 @@ gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
         ])
         
         return steps
+    
+    def _should_create_deployment_config(self, description: str, preferences: Dict[str, Any] = None) -> bool:
+        """Check if user specifically requested deployment configurations"""
+        description_lower = description.lower()
+        
+        deployment_keywords = [
+            'docker', 'deployment', 'deploy', 'production', 'containerize',
+            'kubernetes', 'k8s', 'nginx', 'apache', 'server setup'
+        ]
+        
+        # Check if user explicitly requested deployment
+        if any(keyword in description_lower for keyword in deployment_keywords):
+            return True
+        
+        # Check preferences
+        if preferences and preferences.get('deployment_preference'):
+            return True
+        
+        return False
+    
+    async def _generate_node_backend(self, architecture: Dict[str, Any], result: Dict[str, Any]):
+        """Generate Node.js backend for React applications"""
+        app_type = architecture.get('app_type', 'business')
+        
+        # Generate backend package.json
+        backend_package = {
+            "name": f"{app_type}-backend",
+            "version": "1.0.0",
+            "description": f"Backend API for {app_type} application",
+            "main": "server.js",
+            "scripts": {
+                "start": "node server.js",
+                "dev": "nodemon server.js",
+                "test": "jest"
+            },
+            "dependencies": {
+                "express": "^4.18.2",
+                "cors": "^2.8.5",
+                "helmet": "^6.0.1",
+                "morgan": "^1.10.0",
+                "dotenv": "^16.0.3"
+            },
+            "devDependencies": {
+                "nodemon": "^2.0.20",
+                "jest": "^29.3.1"
+            }
+        }
+        
+        # Add specific dependencies based on features
+        if 'user_auth' in architecture.get('features', []):
+            backend_package['dependencies'].update({
+                "bcryptjs": "^2.4.3",
+                "jsonwebtoken": "^9.0.0"
+            })
+        
+        if 'database' in architecture.get('features', []) or app_type == 'ecommerce':
+            backend_package['dependencies'].update({
+                "mongoose": "^6.8.4"
+            })
+        
+        if 'shopping_cart' in architecture.get('features', []):
+            backend_package['dependencies'].update({
+                "stripe": "^11.6.0"
+            })
+        
+        await self.code_generator.create_file(
+            'backend/package.json',
+            json.dumps(backend_package, indent=2),
+            'Backend package configuration'
+        )
+        
+        # Generate main server.js
+        server_content = self._generate_express_server(architecture)
+        await self.code_generator.create_file('backend/server.js', server_content, 'Express server')
+        
+        # Generate routes
+        for endpoint_group in ['auth', 'api']:
+            route_content = self._generate_express_route(endpoint_group, architecture)
+            await self.code_generator.create_file(
+                f'backend/routes/{endpoint_group}.js',
+                route_content,
+                f'{endpoint_group.title()} routes'
+            )
+        
+        # Generate models if using database
+        if 'database' in architecture.get('features', []) or app_type == 'ecommerce':
+            models = ['User', 'Product', 'Order'] if app_type == 'ecommerce' else ['User', 'Data']
+            for model in models:
+                model_content = self._generate_mongoose_model(model, architecture)
+                await self.code_generator.create_file(
+                    f'backend/models/{model}.js',
+                    model_content,
+                    f'{model} model'
+                )
+        
+        result['files'].append('backend/server.js')
+    
+    def _generate_express_server(self, architecture: Dict[str, Any]) -> str:
+        """Generate Express.js server file"""
+        app_type = architecture.get('app_type', 'business')
+        features = architecture.get('features', [])
+        
+        imports = [
+            "const express = require('express');",
+            "const cors = require('cors');",
+            "const helmet = require('helmet');",
+            "const morgan = require('morgan');",
+            "require('dotenv').config();"
+        ]
+        
+        if 'database' in features or app_type == 'ecommerce':
+            imports.append("const mongoose = require('mongoose');")
+        
+        middleware_setup = [
+            "// Middleware",
+            "app.use(helmet());",
+            "app.use(cors());",
+            "app.use(morgan('combined'));",
+            "app.use(express.json());",
+            "app.use(express.urlencoded({ extended: true }));"
+        ]
+        
+        routes_setup = [
+            "// Routes",
+            "app.use('/api/auth', require('./routes/auth'));",
+            "app.use('/api', require('./routes/api'));"
+        ]
+        
+        db_setup = ""
+        if 'database' in features or app_type == 'ecommerce':
+            db_setup = """
+// Database connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/app', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+mongoose.connection.on('connected', () => {
+  console.log('✅ Connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB connection error:', err);
+});"""
+        
+        return f"""const express = require('express');
+{chr(10).join(imports)}
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+{chr(10).join(middleware_setup)}
+{db_setup}
+
+{chr(10).join(routes_setup)}
+
+// Health check endpoint
+app.get('/health', (req, res) => {{
+  res.json({{ status: 'OK', message: 'Server is running!' }});
+}});
+
+// Error handling middleware
+app.use((err, req, res, next) => {{
+  console.error(err.stack);
+  res.status(500).json({{ message: 'Something went wrong!' }});
+}});
+
+// 404 handler
+app.use((req, res) => {{
+  res.status(404).json({{ message: 'Route not found' }});
+}});
+
+app.listen(PORT, () => {{
+  console.log(`🚀 Server running on port ${{PORT}}`);
+}});"""
+    
+    def _generate_express_route(self, route_type: str, architecture: Dict[str, Any]) -> str:
+        """Generate Express route files"""
+        if route_type == 'auth':
+            return """const express = require('express');
+const router = express.Router();
+
+// Register endpoint
+router.post('/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+    
+    // Add validation here
+    if (!email || !password || !name) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+    
+    // Create user logic here
+    res.status(201).json({ 
+      message: 'User created successfully',
+      user: { email, name }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Registration failed', error: error.message });
+  }
+});
+
+// Login endpoint
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Add authentication logic here
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    
+    // Authenticate user and return token
+    res.json({ 
+      message: 'Login successful',
+      token: 'your-jwt-token-here',
+      user: { email }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Login failed', error: error.message });
+  }
+});
+
+module.exports = router;"""
+        
+        elif route_type == 'api':
+            app_type = architecture.get('app_type', 'business')
+            
+            if app_type == 'ecommerce':
+                return """const express = require('express');
+const router = express.Router();
+
+// Get all products
+router.get('/products', async (req, res) => {
+  try {
+    // Fetch products from database
+    const products = [
+      { id: 1, name: 'Sample Product', price: 29.99, description: 'A great product' },
+      { id: 2, name: 'Another Product', price: 39.99, description: 'Another great product' }
+    ];
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch products' });
+  }
+});
+
+// Get single product
+router.get('/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Fetch single product from database
+    const product = { id, name: 'Sample Product', price: 29.99, description: 'A great product' };
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: 'Product not found' });
+  }
+});
+
+// Add to cart
+router.post('/cart/add', async (req, res) => {
+  try {
+    const { productId, quantity } = req.body;
+    // Add cart logic here
+    res.json({ message: 'Product added to cart', productId, quantity });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to add to cart' });
+  }
+});
+
+// Create order
+router.post('/orders', async (req, res) => {
+  try {
+    const { items, total } = req.body;
+    // Create order logic here
+    res.status(201).json({ 
+      message: 'Order created successfully',
+      orderId: Date.now(),
+      total
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to create order' });
+  }
+});
+
+module.exports = router;"""
+            
+            else:
+                return """const express = require('express');
+const router = express.Router();
+
+// Get data endpoint
+router.get('/data', async (req, res) => {
+  try {
+    const data = [
+      { id: 1, title: 'Sample Data', content: 'This is sample content' },
+      { id: 2, title: 'More Data', content: 'This is more sample content' }
+    ];
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch data' });
+  }
+});
+
+// Create data endpoint
+router.post('/data', async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    const newData = { id: Date.now(), title, content };
+    res.status(201).json(newData);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to create data' });
+  }
+});
+
+module.exports = router;"""
+    
+    def _generate_mongoose_model(self, model_name: str, architecture: Dict[str, Any]) -> str:
+        """Generate Mongoose model files"""
+        if model_name == 'User':
+            return """const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true
+  },
+  password: {
+    type: String,
+    required: true,
+    minlength: 6
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+module.exports = mongoose.model('User', userSchema);"""
+        
+        elif model_name == 'Product':
+            return """const mongoose = require('mongoose');
+
+const productSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  category: {
+    type: String,
+    required: true
+  },
+  image: {
+    type: String,
+    default: ''
+  },
+  stock: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  featured: {
+    type: Boolean,
+    default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+module.exports = mongoose.model('Product', productSchema);"""
+        
+        elif model_name == 'Order':
+            return """const mongoose = require('mongoose');
+
+const orderSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  items: [{
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    price: {
+      type: Number,
+      required: true
+    }
+  }],
+  total: {
+    type: Number,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+    default: 'pending'
+  },
+  shippingAddress: {
+    street: String,
+    city: String,
+    state: String,
+    zipCode: String,
+    country: String
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+module.exports = mongoose.model('Order', orderSchema);"""
+        
+        else:
+            return f"""const mongoose = require('mongoose');
+
+const {model_name.lower()}Schema = new mongoose.Schema({{
+  title: {{
+    type: String,
+    required: true
+  }},
+  content: {{
+    type: String,
+    required: true
+  }},
+  createdAt: {{
+    type: Date,
+    default: Date.now
+  }}
+}});
+
+module.exports = mongoose.model('{model_name}', {model_name.lower()}Schema);"""
+    
+    async def _generate_react_styles(self, architecture: Dict[str, Any]):
+        """Generate CSS styles for React application"""
+        global_css = """/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  color: #333;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Navigation Styles */
+.navigation {
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navigation .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 20px;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2c5aa0;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: #333;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.nav-link:hover {
+  color: #2c5aa0;
+}
+
+/* Button Styles */
+.btn {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background: #2c5aa0;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.3s ease;
+}
+
+.btn:hover {
+  background: #1e3f73;
+}
+
+.btn-secondary {
+  background: #6c757d;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
+}
+
+/* Card Styles */
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin-bottom: 1rem;
+}
+
+/* Grid Layouts */
+.grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #2c5aa0;
+  box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.2);
+}
+
+/* Utility Classes */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 1rem; }
+.mt-4 { margin-top: 1.5rem; }
+.mt-5 { margin-top: 3rem; }
+
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 1rem; }
+.mb-4 { margin-bottom: 1.5rem; }
+.mb-5 { margin-bottom: 3rem; }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .navigation .container {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .nav-links {
+    gap: 1rem;
+  }
+  
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}"""
+        
+        await self.code_generator.create_file(
+            'frontend/src/styles/global.css',
+            global_css,
+            'Global CSS styles'
+        )
