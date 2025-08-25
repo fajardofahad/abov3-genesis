@@ -11,6 +11,7 @@ import json
 from .ollama_client import OllamaClient
 from .code_generator import CodeGenerator
 from .project_intelligence import ProjectIntelligence
+from .app_generator import FullApplicationGenerator
 
 class Assistant:
     """
@@ -31,14 +32,16 @@ class Assistant:
         # This will be updated by the main app with the saved model
         self.default_model = "llama3:latest"
         
-        # Initialize code generator and project intelligence if we have project context
+        # Initialize code generator, project intelligence, and app generator if we have project context
         self.code_generator = None
         self.project_intelligence = None
+        self.app_generator = None
         if project_context and 'project_path' in project_context:
             from pathlib import Path
             project_path = Path(project_context['project_path'])
             self.code_generator = CodeGenerator(project_path)
             self.project_intelligence = ProjectIntelligence(project_path)
+            self.app_generator = FullApplicationGenerator(project_path)
     
     async def process(self, user_input: str, context: Dict[str, Any] = None) -> str:
         """Process user input and return response"""
@@ -47,13 +50,14 @@ class Assistant:
             if context:
                 self.project_context.update(context)
                 
-                # Initialize or update code generator and project intelligence if we have project path
+                # Initialize or update all generators if we have project path
                 if 'project_path' in context and not self.code_generator:
                     from pathlib import Path
                     project_path = Path(context['project_path'])
                     self.code_generator = CodeGenerator(project_path)
                     self.project_intelligence = ProjectIntelligence(project_path)
-                    print(f"[DEBUG] Initialized CodeGenerator and ProjectIntelligence with path: {context['project_path']}")
+                    self.app_generator = FullApplicationGenerator(project_path)
+                    print(f"[DEBUG] Initialized all generators with path: {context['project_path']}")
                 elif 'project_path' in context and self.code_generator:
                     # Update if project path changed
                     from pathlib import Path
@@ -61,7 +65,8 @@ class Assistant:
                     if new_path != self.code_generator.project_path:
                         self.code_generator = CodeGenerator(new_path)
                         self.project_intelligence = ProjectIntelligence(new_path)
-                        print(f"[DEBUG] Updated CodeGenerator and ProjectIntelligence with new path: {context['project_path']}")
+                        self.app_generator = FullApplicationGenerator(new_path)
+                        print(f"[DEBUG] Updated all generators with new path: {context['project_path']}")
                 else:
                     print(f"[DEBUG] Context: {context}, Code generator exists: {self.code_generator is not None}")
             
@@ -92,17 +97,21 @@ class Assistant:
             messages = self._prepare_messages(user_input, system_prompt)
             
             # Check for different types of requests in priority order
+            is_full_app_request = self._is_full_application_request(user_input)
             is_project_status = self._is_project_status_request(user_input)
             is_file_operation = self._is_file_operation_request(user_input)
             is_debug_request = self._is_debug_request(user_input)
             is_code_request = self._is_code_generation_request(user_input)
             
+            print(f"[DEBUG] Full application request: {is_full_app_request}")
             print(f"[DEBUG] Project status request: {is_project_status}")
             print(f"[DEBUG] File operation request: {is_file_operation}")
             print(f"[DEBUG] Debug/error fixing request: {is_debug_request}")
             print(f"[DEBUG] Code generation request: {is_code_request}")
             
-            if is_project_status:
+            if is_full_app_request:
+                response_text = await self._handle_full_application_request(user_input, messages, model)
+            elif is_project_status:
                 response_text = await self._handle_project_status(user_input, messages, model)
             elif is_file_operation:
                 response_text = await self._handle_file_operations(user_input)
@@ -116,7 +125,7 @@ class Assistant:
             
             # Record interaction for learning if we have project intelligence
             if self.project_intelligence:
-                action_type = 'project_status' if is_project_status else 'file_op' if is_file_operation else 'debug' if is_debug_request else 'code_gen' if is_code_request else 'conversation'
+                action_type = 'full_app' if is_full_app_request else 'project_status' if is_project_status else 'file_op' if is_file_operation else 'debug' if is_debug_request else 'code_gen' if is_code_request else 'conversation'
                 await self.project_intelligence.record_interaction(
                     user_input, response_text, 
                     action_taken=action_type
@@ -1587,6 +1596,198 @@ Please provide a comprehensive explanation of what this project does, how it wor
             
         except Exception as e:
             return f"❌ Error during project analysis: {str(e)}"
+    
+    def _is_full_application_request(self, user_input: str) -> bool:
+        """Check if user is requesting a complete application to be built"""
+        user_input_lower = user_input.lower()
+        
+        # Full application keywords
+        full_app_keywords = [
+            'make me a website', 'create a website', 'build a website',
+            'make me an app', 'create an app', 'build an app',
+            'make me a mobile app', 'create a mobile app', 'build a mobile app',
+            'create a full', 'build a full', 'make a full',
+            'complete website', 'complete application', 'complete app',
+            'entire website', 'entire application', 'entire app',
+            'full stack', 'end to end', 'production ready',
+            'from scratch', 'ground up'
+        ]
+        
+        # Business/domain specific requests that typically need full apps
+        business_app_patterns = [
+            'coffee shop website', 'restaurant website', 'e-commerce', 'online store',
+            'portfolio website', 'business website', 'company website',
+            'blog website', 'news website', 'social media app',
+            'todo app', 'chat app', 'calendar app', 'note taking app',
+            'inventory system', 'booking system', 'reservation system'
+        ]
+        
+        # Check for explicit full application requests
+        if any(keyword in user_input_lower for keyword in full_app_keywords):
+            return True
+        
+        # Check for business/domain patterns that typically need full apps
+        if any(pattern in user_input_lower for pattern in business_app_patterns):
+            return True
+        
+        # Check for complex feature combinations that suggest full app
+        feature_count = 0
+        features = [
+            'with login', 'with authentication', 'with user accounts',
+            'with cart', 'with shopping', 'with payment',
+            'with database', 'with admin', 'with dashboard',
+            'with api', 'with backend', 'with search',
+            'with comments', 'with reviews', 'with ratings'
+        ]
+        
+        for feature in features:
+            if feature in user_input_lower:
+                feature_count += 1
+        
+        # If requesting multiple complex features, likely needs full app
+        if feature_count >= 2:
+            return True
+        
+        return False
+    
+    async def _handle_full_application_request(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle full application generation requests"""
+        if not self.app_generator:
+            return "❌ Full application generation requires a project directory. Please set up a project first."
+        
+        try:
+            print(f"[DEBUG] Starting full application generation for: {user_input[:100]}...")
+            
+            # Extract preferences from user input (could be enhanced with AI analysis)
+            preferences = await self._extract_app_preferences(user_input, messages, model)
+            
+            # Generate the complete application
+            generation_result = await self.app_generator.generate_full_application(user_input, preferences)
+            
+            if generation_result.get('success'):
+                # Prepare success response
+                analysis = generation_result.get('analysis', {})
+                architecture = generation_result.get('architecture', {})
+                files = generation_result.get('generated_files', [])
+                next_steps = generation_result.get('next_steps', [])
+                
+                response_parts = [
+                    "🚀 **Complete Application Generated Successfully!**",
+                    "",
+                    f"📊 **Application Analysis:**",
+                    f"- Type: {analysis.get('app_type', 'Unknown').replace('_', ' ').title()}",
+                    f"- Platform: {analysis.get('target_platform', 'Unknown').title()}",
+                    f"- Complexity: {analysis.get('complexity', 'Unknown').title()}",
+                    f"- Tech Stack: {architecture.get('tech_stack', 'Unknown').replace('_', ' ').title()}",
+                    ""
+                ]
+                
+                # Add features
+                if analysis.get('features'):
+                    response_parts.extend([
+                        "✨ **Features Implemented:**",
+                        *[f"- {feature.replace('_', ' ').title()}" for feature in analysis['features']],
+                        ""
+                    ])
+                
+                # Add generated components
+                if architecture.get('pages'):
+                    response_parts.extend([
+                        "📄 **Pages Created:**",
+                        *[f"- {page.replace('_', ' ').replace('-', ' ').title()}" for page in architecture['pages']],
+                        ""
+                    ])
+                
+                if architecture.get('components'):
+                    response_parts.extend([
+                        "🧩 **Components Generated:**",
+                        *[f"- {component}" for component in architecture['components'][:5]],  # Show first 5
+                        f"- ... and {len(architecture['components']) - 5} more" if len(architecture['components']) > 5 else "",
+                        ""
+                    ])
+                
+                # Add file summary
+                response_parts.extend([
+                    f"📁 **Files Generated:** {len(files)} files",
+                    ""
+                ])
+                
+                # Add deployment info
+                deployment = generation_result.get('deployment', {})
+                if deployment.get('instructions'):
+                    response_parts.extend([
+                        "🚀 **Quick Start:**",
+                        *[f"- {instruction}" for instruction in deployment['instructions'][:3]],
+                        ""
+                    ])
+                
+                # Add next steps
+                if next_steps:
+                    response_parts.extend([
+                        "📋 **Next Steps:**",
+                        *[f"- {step}" for step in next_steps[:5]],
+                        ""
+                    ])
+                
+                response_parts.extend([
+                    "📚 **Documentation:** Check README.md for complete setup instructions",
+                    "🎯 **Your production-ready application is ready to deploy!**"
+                ])
+                
+                return '\n'.join(response_parts)
+            
+            else:
+                error = generation_result.get('error', 'Unknown error occurred')
+                return f"❌ **Application Generation Failed**\n\nError: {error}\n\nPlease try again with a more specific request or check your project setup."
+            
+        except Exception as e:
+            return f"❌ **Error during application generation:** {str(e)}\n\nPlease try again or provide more details about the application you want to create."
+    
+    async def _extract_app_preferences(self, user_input: str, messages: List[Dict[str, str]], model: str) -> Dict[str, Any]:
+        """Extract user preferences for application generation using AI"""
+        try:
+            # Create prompt to extract preferences
+            preference_prompt = f"""
+Analyze this user request for building an application and extract their preferences:
+
+USER REQUEST: {user_input}
+
+Extract and return ONLY the following information in JSON format:
+
+{{
+    "tech_stack": "preferred technology (react_node_mongodb, html_css_js, flutter, etc.)",
+    "features": ["list", "of", "requested", "features"],
+    "style_preferences": "visual style preferences if mentioned",
+    "target_audience": "who is this for",
+    "complexity_preference": "simple/medium/advanced",
+    "deployment_preference": "where they want to deploy if mentioned"
+}}
+
+Focus only on what is explicitly mentioned or clearly implied. If something is not mentioned, use appropriate defaults.
+"""
+            
+            # Get AI analysis
+            preference_messages = [{"role": "user", "content": preference_prompt}]
+            ai_response = await self._get_ai_response(model, preference_messages)
+            
+            # Try to parse JSON response
+            try:
+                import json
+                import re
+                
+                # Extract JSON from response
+                json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+                if json_match:
+                    preferences = json.loads(json_match.group(0))
+                    return preferences
+                else:
+                    return {}
+            except:
+                return {}
+                
+        except Exception as e:
+            print(f"[DEBUG] Error extracting preferences: {e}")
+            return {}
     
     async def create_file_directly(self, file_path: str, content: str, description: str = None) -> Dict[str, Any]:
         """Direct method to create files in the project"""
