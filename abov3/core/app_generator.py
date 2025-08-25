@@ -133,17 +133,17 @@ class FullApplicationGenerator:
         if any(word in description_lower for word in ['website', 'web app', 'web application', 'site']):
             analysis['target_platform'] = 'web'
             
-            # Determine website category
-            if any(word in description_lower for word in ['shop', 'store', 'ecommerce', 'e-commerce', 'cart', 'buy', 'sell']):
-                analysis['app_type'] = 'ecommerce'
-                analysis['category'] = 'business'
-                analysis['complexity'] = 'high'
-                analysis['estimated_files'] = 25
-            elif any(word in description_lower for word in ['restaurant', 'cafe', 'coffee', 'food', 'menu', 'dining']):
+            # Determine website category (prioritize restaurant/cafe over ecommerce)
+            if any(word in description_lower for word in ['restaurant', 'cafe', 'coffee', 'food', 'menu', 'dining']):
                 analysis['app_type'] = 'restaurant'
                 analysis['category'] = 'business'
                 analysis['complexity'] = 'medium'
                 analysis['estimated_files'] = 15
+            elif any(word in description_lower for word in ['shop', 'store', 'ecommerce', 'e-commerce', 'buy', 'sell']) and not any(word in description_lower for word in ['coffee shop', 'restaurant', 'cafe', 'food']):
+                analysis['app_type'] = 'ecommerce'
+                analysis['category'] = 'business'
+                analysis['complexity'] = 'high'
+                analysis['estimated_files'] = 25
             elif any(word in description_lower for word in ['portfolio', 'personal', 'resume', 'cv']):
                 analysis['app_type'] = 'portfolio'
                 analysis['category'] = 'personal'
@@ -192,7 +192,10 @@ class FullApplicationGenerator:
         
         # Determine recommended tech stack
         if analysis['target_platform'] == 'web':
-            if analysis['complexity'] == 'high' or 'shopping_cart' in analysis['features']:
+            # For restaurants and portfolios, prefer simple static websites unless complex features are needed
+            if analysis['app_type'] in ['restaurant', 'portfolio'] and not any(feature in analysis['features'] for feature in ['shopping_cart', 'user_auth', 'admin_panel']):
+                analysis['tech_stack'] = 'html_css_js'
+            elif analysis['complexity'] == 'high' or 'shopping_cart' in analysis['features']:
                 analysis['tech_stack'] = 'react_node_mongodb'
             elif analysis['complexity'] == 'medium':
                 analysis['tech_stack'] = 'html_css_js_backend'
@@ -447,36 +450,44 @@ class FullApplicationGenerator:
         if 'shopping_cart' in architecture.get('features', []):
             frontend_package['dependencies']['@stripe/stripe-js'] = '^1.46.0'
         
-        await self.code_generator.create_file(
+        file_result = await self.code_generator.create_file(
             'frontend/package.json',
             json.dumps(frontend_package, indent=2),
             'Frontend package configuration'
         )
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
         # Generate main App.js
         app_js_content = self._generate_react_app_component(architecture)
-        await self.code_generator.create_file('frontend/src/App.js', app_js_content, 'Main React App component')
+        file_result = await self.code_generator.create_file('frontend/src/App.js', app_js_content, 'Main React App component')
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
         # Generate pages
         for page in architecture.get('pages', []):
             page_content = self._generate_react_page(page, architecture)
             page_name = f"{page.replace('-', '_').title().replace('_', '')}Page"
-            await self.code_generator.create_file(
+            file_result = await self.code_generator.create_file(
                 f'frontend/src/pages/{page_name}.js',
                 page_content,
                 f'{page_name} component'
             )
-            result['pages_created'] += 1
+            if file_result.get('success'):
+                result['files'].append(file_result)
+                result['pages_created'] += 1
         
         # Generate components
         for component in architecture.get('components', []):
             component_content = self._generate_react_component(component, architecture)
-            await self.code_generator.create_file(
+            file_result = await self.code_generator.create_file(
                 f'frontend/src/components/{component}.js',
                 component_content,
                 f'{component} React component'
             )
-            result['components_created'] += 1
+            if file_result.get('success'):
+                result['files'].append(file_result)
+                result['components_created'] += 1
         
         # Generate backend package.json and server
         await self._generate_node_backend(architecture, result)
@@ -812,24 +823,31 @@ export default {component};"""
         
         # Generate index.html
         index_content = self._generate_static_index_html(architecture)
-        await self.code_generator.create_file('index.html', index_content, 'Main HTML page')
+        file_result = await self.code_generator.create_file('index.html', index_content, 'Main HTML page')
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
         # Generate additional pages
         for page in architecture.get('pages', []):
             if page != 'home':
                 page_content = self._generate_static_page_html(page, architecture)
-                await self.code_generator.create_file(f'{page}.html', page_content, f'{page.title()} page')
-                result['pages_created'] += 1
+                file_result = await self.code_generator.create_file(f'{page}.html', page_content, f'{page.title()} page')
+                if file_result.get('success'):
+                    result['files'].append(file_result)
+                    result['pages_created'] += 1
         
         # Generate CSS
         css_content = self._generate_static_css(architecture)
-        await self.code_generator.create_file('styles/main.css', css_content, 'Main stylesheet')
+        file_result = await self.code_generator.create_file('styles/main.css', css_content, 'Main stylesheet')
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
         # Generate JavaScript
         js_content = self._generate_static_javascript(architecture)
-        await self.code_generator.create_file('scripts/main.js', js_content, 'Main JavaScript file')
+        file_result = await self.code_generator.create_file('scripts/main.js', js_content, 'Main JavaScript file')
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
-        result['files'].extend(['index.html', 'styles/main.css', 'scripts/main.js'])
         result['components_created'] = len(architecture.get('components', []))
     
     def _generate_static_index_html(self, architecture: Dict[str, Any]) -> str:
@@ -956,6 +974,164 @@ export default {component};"""
     <script src="scripts/main.js"></script>
 </body>
 </html>"""
+    
+    def _generate_static_page_html(self, page: str, architecture: Dict[str, Any]) -> str:
+        """Generate HTML for additional pages"""
+        app_type = architecture.get('app_type', 'business')
+        pages = architecture.get('pages', [])
+        
+        # Generate navigation
+        nav_links = []
+        for nav_page in pages:
+            if nav_page == 'home':
+                nav_links.append('          <a href="index.html">Home</a>')
+            elif nav_page == page:
+                nav_links.append(f'          <a href="{nav_page}.html" class="active">{nav_page.replace("-", " ").title()}</a>')
+            else:
+                nav_links.append(f'          <a href="{nav_page}.html">{nav_page.replace("-", " ").title()}</a>')
+        
+        # Page-specific content
+        if page == 'menu':
+            content = '''    <section class="menu-section">
+      <div class="container">
+        <h1>Our Menu</h1>
+        <div class="menu-categories">
+          <div class="menu-category">
+            <h2>Coffee & Espresso</h2>
+            <div class="menu-items">
+              <div class="menu-item">
+                <h3>Americano <span class="price">$3.50</span></h3>
+                <p>Rich espresso with hot water</p>
+              </div>
+              <div class="menu-item">
+                <h3>Latte <span class="price">$4.50</span></h3>
+                <p>Espresso with steamed milk and foam</p>
+              </div>
+              <div class="menu-item">
+                <h3>Cappuccino <span class="price">$4.00</span></h3>
+                <p>Equal parts espresso, steamed milk, and foam</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="menu-category">
+            <h2>Pastries & Snacks</h2>
+            <div class="menu-items">
+              <div class="menu-item">
+                <h3>Croissant <span class="price">$2.50</span></h3>
+                <p>Fresh baked buttery croissant</p>
+              </div>
+              <div class="menu-item">
+                <h3>Muffin <span class="price">$3.00</span></h3>
+                <p>Blueberry or chocolate chip</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>'''
+        elif page == 'contact':
+            content = '''    <section class="contact-section">
+      <div class="container">
+        <h1>Contact Us</h1>
+        <div class="contact-content">
+          <div class="contact-info">
+            <h2>Get in Touch</h2>
+            <p><strong>Address:</strong> 123 Coffee Street, City, ST 12345</p>
+            <p><strong>Phone:</strong> (555) 123-4567</p>
+            <p><strong>Email:</strong> info@coffeeshop.com</p>
+            <p><strong>Hours:</strong> Mon-Fri 6AM-8PM, Sat-Sun 7AM-9PM</p>
+          </div>
+          <form class="contact-form">
+            <h2>Send us a message</h2>
+            <input type="text" placeholder="Your Name" required>
+            <input type="email" placeholder="Your Email" required>
+            <textarea placeholder="Your Message" rows="5" required></textarea>
+            <button type="submit">Send Message</button>
+          </form>
+        </div>
+      </div>
+    </section>'''
+        elif page == 'about':
+            content = '''    <section class="about-section">
+      <div class="container">
+        <h1>About Us</h1>
+        <div class="about-content">
+          <div class="about-text">
+            <h2>Our Story</h2>
+            <p>Welcome to our coffee shop! We've been serving the community with exceptional coffee and warm hospitality since our founding. Our passion for quality coffee drives everything we do.</p>
+            
+            <h2>Our Mission</h2>
+            <p>To create a welcoming space where people can enjoy expertly crafted coffee, delicious food, and meaningful connections with their community.</p>
+            
+            <h2>What Makes Us Special</h2>
+            <ul>
+              <li>Locally sourced, ethically traded coffee beans</li>
+              <li>Fresh baked goods made daily</li>
+              <li>Experienced baristas who care about their craft</li>
+              <li>A warm, inviting atmosphere</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>'''
+        else:
+            # Generic page content
+            content = f'''    <section class="page-section">
+      <div class="container">
+        <h1>{page.replace("-", " ").title()}</h1>
+        <p>Welcome to the {page.replace("-", " ")} page. This content can be customized based on your specific needs.</p>
+      </div>
+    </section>'''
+        
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{page.replace("-", " ").title()} - Your Coffee Shop</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h2>Your Coffee Shop</h2>
+            </div>
+            <div class="nav-menu">
+{chr(10).join(nav_links)}
+            </div>
+        </div>
+    </nav>
+
+    <main>
+{content}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Your Coffee Shop</h3>
+                    <p>Serving exceptional coffee and creating community connections.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact Info</h4>
+                    <p>Email: info@coffeeshop.com</p>
+                    <p>Phone: (555) 123-4567</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Your Coffee Shop. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="scripts/main.js"></script>
+</body>
+</html>'''
     
     def _generate_static_css(self, architecture: Dict[str, Any]) -> str:
         """Generate comprehensive CSS for static website"""
@@ -1980,19 +2156,13 @@ gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
     
     def _should_create_deployment_config(self, description: str, preferences: Dict[str, Any] = None) -> bool:
         """Check if user specifically requested deployment configurations"""
+        # NEVER create deployment configurations unless explicitly requested with 'docker' or 'deploy'
         description_lower = description.lower()
         
-        deployment_keywords = [
-            'docker', 'deployment', 'deploy', 'production', 'containerize',
-            'kubernetes', 'k8s', 'nginx', 'apache', 'server setup'
-        ]
+        explicit_deployment_keywords = ['docker', 'deployment', 'deploy']
         
-        # Check if user explicitly requested deployment
-        if any(keyword in description_lower for keyword in deployment_keywords):
-            return True
-        
-        # Check preferences
-        if preferences and preferences.get('deployment_preference'):
+        # Only if user explicitly asks for deployment
+        if any(keyword in description_lower for keyword in explicit_deployment_keywords):
             return True
         
         return False
@@ -2042,37 +2212,43 @@ gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
                 "stripe": "^11.6.0"
             })
         
-        await self.code_generator.create_file(
+        file_result = await self.code_generator.create_file(
             'backend/package.json',
             json.dumps(backend_package, indent=2),
             'Backend package configuration'
         )
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
         # Generate main server.js
         server_content = self._generate_express_server(architecture)
-        await self.code_generator.create_file('backend/server.js', server_content, 'Express server')
+        file_result = await self.code_generator.create_file('backend/server.js', server_content, 'Express server')
+        if file_result.get('success'):
+            result['files'].append(file_result)
         
         # Generate routes
         for endpoint_group in ['auth', 'api']:
             route_content = self._generate_express_route(endpoint_group, architecture)
-            await self.code_generator.create_file(
+            file_result = await self.code_generator.create_file(
                 f'backend/routes/{endpoint_group}.js',
                 route_content,
                 f'{endpoint_group.title()} routes'
             )
+            if file_result.get('success'):
+                result['files'].append(file_result)
         
         # Generate models if using database
         if 'database' in architecture.get('features', []) or app_type == 'ecommerce':
             models = ['User', 'Product', 'Order'] if app_type == 'ecommerce' else ['User', 'Data']
             for model in models:
                 model_content = self._generate_mongoose_model(model, architecture)
-                await self.code_generator.create_file(
+                file_result = await self.code_generator.create_file(
                     f'backend/models/{model}.js',
                     model_content,
                     f'{model} model'
                 )
-        
-        result['files'].append('backend/server.js')
+                if file_result.get('success'):
+                    result['files'].append(file_result)
     
     def _generate_express_server(self, architecture: Dict[str, Any]) -> str:
         """Generate Express.js server file"""
