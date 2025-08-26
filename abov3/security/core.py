@@ -250,13 +250,29 @@ class SecurityCore:
                     validation_result['risk_score'] += 50
                     
             # Input validation
-            if self.input_validator:
-                input_result = await self.input_validator.validate_input(request_data)
+            if self.input_validator and 'input' in request_data:
+                # Extract the actual input string from the request data
+                input_str = request_data.get('input', '')
+                input_type_str = request_data.get('input_type', 'text')
+                
+                # Map string input type to InputType enum if needed
+                from abov3.security.input_validator import InputType
+                input_type_map = {
+                    'text': InputType.TEXT,
+                    'code': InputType.CODE,
+                    'command': InputType.COMMAND,
+                    'python': InputType.PYTHON
+                }
+                input_type = input_type_map.get(input_type_str, InputType.TEXT)
+                
+                input_result = await self.input_validator.validate_input(input_str, input_type)
                 if not input_result['valid']:
                     validation_result['valid'] = False
                     validation_result['errors'].extend(input_result['errors'])
                 validation_result['warnings'].extend(input_result.get('warnings', []))
-                validation_result['processed_request'] = input_result.get('sanitized_input', request_data)
+                
+                # Update the processed request with sanitized input
+                validation_result['processed_request']['input'] = input_result.get('sanitized_input', input_str)
                 validation_result['risk_score'] += input_result.get('risk_score', 0)
                 
             # AI prompt injection guard
