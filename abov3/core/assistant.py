@@ -747,29 +747,29 @@ Only show files that actually need changes."""
     
     
     async def _handle_new_file_creation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
-        """Handle creation of new files"""
+        """Handle creation of new files using AI-powered naming"""
         try:
             # Get AI response for the code
             ai_response = await self._get_ai_response(model, messages)
             
-            # Try to extract code blocks and file paths from the response
+            # Try to extract code blocks from the response
             code_blocks = self._extract_code_blocks(ai_response)
-            file_paths = self._extract_file_paths(user_input)
             
             print(f"[DEBUG] Found {len(code_blocks)} code blocks")
-            print(f"[DEBUG] Found {len(file_paths)} file paths")
             
-            # Always create files if we have code blocks, even without explicit file paths
+            # Use the new AI-powered file creation method
             if code_blocks:
                 print(f"[DEBUG] Processing {len(code_blocks)} code blocks for file creation")
-                created_files = []
+                # Use the AI-powered file creation method
+                created_files = await self._create_files_from_code_blocks(
+                    code_blocks, user_input, ai_response
+                )
                 
-                for i, code_block in enumerate(code_blocks):
-                    # Determine file path
-                    if i < len(file_paths):
-                        file_path = file_paths[i]
-                    else:
-                        # Generate file path based on language - comprehensive mapping
+                # If AI file creation didn't work, fall back to simple naming
+                if not created_files:
+                    created_files = []
+                    for i, code_block in enumerate(code_blocks):
+                        # Fallback: Generate file path based on language
                         language = code_block.get('language', 'python')
                         extensions = {
                             # Web Development
@@ -904,44 +904,25 @@ Only show files that actually need changes."""
                         }
                         extension = extensions.get(language.lower(), '.txt')
                         
-                        # Determine base filename from user request
-                        base_filename = 'generated_file'
-                        user_input_words = user_input.lower().split()
-                        
-                        # Look for common file name patterns for new files
-                        if 'hello' in user_input_words and 'world' in user_input_words:
-                            base_filename = 'hello_world'
-                        elif 'index' in user_input_words:
-                            base_filename = 'index'
-                        elif 'main' in user_input_words:
-                            base_filename = 'main'
-                        elif 'app' in user_input_words:
-                            base_filename = 'app'
-                        elif 'server' in user_input_words:
-                            base_filename = 'server'
-                        elif 'client' in user_input_words:
-                            base_filename = 'client'
-                        elif 'test' in user_input_words:
-                            base_filename = 'test'
-                        elif 'example' in user_input_words:
-                            base_filename = 'example'
+                        # Fallback: Determine base filename from user request
+                        base_filename = self._get_smart_filename(user_input, language)
                         
                         file_path = f"{base_filename}{extension}"
-                    
-                    # Create the new file
-                    result = await self.code_generator.create_file(
-                        file_path,
-                        code_block['code'],
-                        f"Generated from request: {user_input[:50]}...",
-                        overwrite=False  # New files only, no overwriting
-                    )
-                    
-                    if result['success']:
-                        created_files.append({
-                            'path': result['path'],
-                            'size': result['size'],
-                            'lines': result['lines']
-                        })
+                        
+                        # Create the new file
+                        result = await self.code_generator.create_file(
+                            file_path,
+                            code_block['code'],
+                            f"Generated from request: {user_input[:50]}...",
+                            overwrite=False
+                        )
+                        
+                        if result['success']:
+                            created_files.append({
+                                'path': result['path'],
+                                'size': result['size'],
+                                'lines': result['lines']
+                            })
                 
                 # Return only file creation summary if files were created, otherwise return AI response
                 if created_files:
@@ -997,13 +978,53 @@ Only show files that actually need changes."""
                 if line.strip() == '' and in_code_section and len(potential_code) > 3:
                     in_code_section = False
                     if potential_code:
+                        # Detect language from code content
+                        code_content = '\n'.join(potential_code)
+                        detected_lang = self._detect_language_from_code(code_content)
                         code_blocks.append({
-                            'language': 'python',  # Default assumption
-                            'code': '\n'.join(potential_code).strip()
+                            'language': detected_lang,
+                            'code': code_content.strip()
                         })
                         potential_code = []
         
+        # If still no code blocks found but text looks like code, treat entire response as code
+        if not code_blocks and len(text) > 50:
+            # Check if the text contains code patterns
+            if any(pattern in text for pattern in ['def ', 'class ', 'import ', 'from ', 'if __name__', 'print(', 'return ']):
+                detected_lang = self._detect_language_from_code(text)
+                code_blocks.append({
+                    'language': detected_lang,
+                    'code': text.strip()
+                })
+                print(f"[DEBUG] Treating entire response as {detected_lang} code")
+        
         return code_blocks
+    
+    def _detect_language_from_code(self, code: str) -> str:
+        """Detect programming language from code content"""
+        code_lower = code.lower()
+        
+        # Python patterns
+        if any(pattern in code for pattern in ['def ', 'import ', 'from ', 'if __name__', 'print(', 'class ', 'self.']):
+            return 'python'
+        # JavaScript patterns
+        elif any(pattern in code for pattern in ['function ', 'const ', 'let ', 'var ', 'console.log', '=>', 'async ', 'await ']):
+            return 'javascript'
+        # HTML patterns
+        elif any(pattern in code_lower for pattern in ['<html', '<body', '<div', '<h1', '<p>', '<!doctype']):
+            return 'html'
+        # CSS patterns
+        elif any(pattern in code for pattern in ['{', '}', ':', ';']) and any(pattern in code_lower for pattern in ['color:', 'margin:', 'padding:', 'font-', 'background:']):
+            return 'css'
+        # Java patterns
+        elif any(pattern in code for pattern in ['public class', 'public static', 'System.out.', 'void main']):
+            return 'java'
+        # C/C++ patterns
+        elif any(pattern in code for pattern in ['#include', 'int main(', 'printf(', 'cout <<', 'cin >>']):
+            return 'cpp'
+        # Default to Python for general code
+        else:
+            return 'python'
     
     def _extract_file_paths(self, user_input: str) -> List[str]:
         """Extract file paths from user input"""
@@ -2038,3 +2059,80 @@ Focus only on what is explicitly mentioned or clearly implied. If something is n
             return 'webapp'
         else:
             return 'website'  # default
+    
+    def _get_smart_filename(self, user_input: str, language: str) -> str:
+        """Generate a smart filename based on user input and language"""
+        user_input_lower = user_input.lower()
+        words = user_input_lower.split()
+        
+        # Python specific names
+        if language == 'python':
+            if 'permutation' in user_input_lower:
+                return 'permutations'
+            elif 'combination' in user_input_lower:
+                return 'combinations'
+            elif 'fibonacci' in user_input_lower:
+                return 'fibonacci'
+            elif 'sort' in user_input_lower:
+                return 'sorting'
+            elif 'search' in user_input_lower:
+                return 'search'
+            elif 'calculator' in user_input_lower:
+                return 'calculator'
+            elif 'game' in user_input_lower:
+                return 'game'
+            elif 'server' in user_input_lower:
+                return 'server'
+            elif 'client' in user_input_lower:
+                return 'client'
+            elif 'api' in user_input_lower:
+                return 'api'
+            elif 'test' in user_input_lower:
+                return 'test'
+            elif 'hello' in words and 'world' in words:
+                return 'hello_world'
+            elif 'main' in words:
+                return 'main'
+            elif 'app' in words:
+                return 'app'
+            else:
+                # Try to extract a meaningful word
+                for word in ['algorithm', 'function', 'class', 'module', 'script', 'program', 'utility', 'helper']:
+                    if word in user_input_lower:
+                        return word
+                return 'script'  # Default for Python
+        
+        # HTML/Web specific names
+        elif language in ['html', 'htm']:
+            if 'landing' in user_input_lower or 'home' in user_input_lower:
+                return 'index'
+            elif 'about' in user_input_lower:
+                return 'about'
+            elif 'contact' in user_input_lower:
+                return 'contact'
+            elif 'portfolio' in user_input_lower:
+                return 'portfolio'
+            elif 'blog' in user_input_lower:
+                return 'blog'
+            elif 'shop' in user_input_lower or 'store' in user_input_lower:
+                return 'shop'
+            else:
+                return 'index'
+        
+        # CSS specific names
+        elif language in ['css', 'scss', 'sass']:
+            return 'styles'
+        
+        # JavaScript specific names
+        elif language in ['javascript', 'js', 'typescript', 'ts']:
+            if 'app' in user_input_lower:
+                return 'app'
+            elif 'main' in user_input_lower:
+                return 'main'
+            elif 'script' in user_input_lower:
+                return 'script'
+            else:
+                return 'main'
+        
+        # Default fallback
+        return 'generated'
