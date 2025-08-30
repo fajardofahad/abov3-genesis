@@ -122,6 +122,22 @@ class Assistant:
             else:
                 # Get AI response
                 response_text = await self._get_ai_response(model, messages)
+                
+                # Check if the AI response contains code blocks that should be written to files
+                if self.code_generator:
+                    code_blocks = self._extract_code_blocks(response_text)
+                    if code_blocks:
+                        # Process code blocks and create files
+                        created_files = await self._create_files_from_code_blocks(
+                            code_blocks, user_input, response_text
+                        )
+                        if created_files:
+                            # Update response with file creation info
+                            file_summary = "\n\n📁 **Files Created:**\n"
+                            for file_info in created_files:
+                                file_summary += f"✅ `{file_info['path']}` ({file_info.get('lines', 0)} lines, {file_info.get('size', 0)} bytes)\n"
+                            file_summary += "\n🎯 **Files are ready in your project directory!**"
+                            response_text = response_text + file_summary
             
             # Record interaction for learning if we have project intelligence
             if self.project_intelligence:
@@ -518,7 +534,8 @@ I'm still here to help with manual guidance and project management!"""
         code_generation_keywords = [
             'write', 'create', 'generate', 'build', 'make',
             'code', 'function', 'class', 'file', 'script',
-            'implement', 'develop', 'program'
+            'implement', 'develop', 'program', 'website', 'page', 'app',
+            'landing', 'homepage', 'application', 'site'
         ]
         
         # Programming language names
@@ -587,7 +604,7 @@ I'm still here to help with manual guidance and project management!"""
         
         has_file_extension = any(ext in user_input_lower for ext in coding_extensions)
         
-        has_make_phrase = any(phrase in user_input_lower for phrase in ['write a', 'create a', 'generate a', 'make a'])
+        has_make_phrase = any(phrase in user_input_lower for phrase in ['write a', 'create a', 'generate a', 'make a', 'make me', 'build me', 'create me'])
         
         print(f"[DEBUG] Code detection - has_code_keyword: {has_code_keyword}, has_file_keyword: {has_file_keyword}, has_file_extension: {has_file_extension}, has_make_phrase: {has_make_phrase}, has_language_keyword: {has_language_keyword}")
         
@@ -1931,3 +1948,74 @@ Focus only on what is explicitly mentioned or clearly implied. If something is n
     def set_agent_manager(self, agent_manager):
         """Set the agent manager for automatic switching"""
         self.agent_manager = agent_manager
+    
+    async def _create_files_from_code_blocks(self, code_blocks: List[Dict[str, str]], user_input: str, ai_response: str) -> List[Dict[str, Any]]:
+        """Create files from extracted code blocks"""
+        created_files = []
+        
+        try:
+            for i, code_block in enumerate(code_blocks):
+                # Determine file path based on language
+                language = code_block.get('language', 'text').lower()
+                
+                # Map language to file extension
+                extensions = {
+                    'html': '.html', 'htm': '.html',
+                    'css': '.css', 'scss': '.scss', 'sass': '.sass',
+                    'javascript': '.js', 'js': '.js', 'jsx': '.jsx',
+                    'typescript': '.ts', 'ts': '.ts', 'tsx': '.tsx',
+                    'python': '.py', 'py': '.py',
+                    'java': '.java', 'kotlin': '.kt',
+                    'cpp': '.cpp', 'c++': '.cpp', 'c': '.c',
+                    'csharp': '.cs', 'cs': '.cs', 'c#': '.cs',
+                    'php': '.php', 'ruby': '.rb', 'rb': '.rb',
+                    'go': '.go', 'golang': '.go',
+                    'rust': '.rs', 'rs': '.rs',
+                    'swift': '.swift', 'dart': '.dart',
+                    'sql': '.sql', 'json': '.json', 'xml': '.xml',
+                    'yaml': '.yaml', 'yml': '.yml',
+                    'bash': '.sh', 'sh': '.sh', 'shell': '.sh',
+                    'powershell': '.ps1', 'ps1': '.ps1',
+                    'markdown': '.md', 'md': '.md'
+                }
+                
+                extension = extensions.get(language, '.txt')
+                
+                # Generate meaningful filename based on content or user input
+                user_input_words = user_input.lower().split()
+                
+                # Try to extract a meaningful name from the user input
+                if 'landing' in user_input_words and 'page' in user_input_words:
+                    base_filename = 'index'
+                elif 'coffee' in user_input_words and 'shop' in user_input_words:
+                    base_filename = 'coffee_shop' if i == 0 else f'coffee_shop_{i}'
+                elif 'website' in user_input_words or 'site' in user_input_words:
+                    base_filename = 'index' if i == 0 else f'page_{i}'
+                elif 'app' in user_input_words or 'application' in user_input_words:
+                    base_filename = 'app' if i == 0 else f'app_{i}'
+                else:
+                    base_filename = f'generated_{i}' if i > 0 else 'generated'
+                
+                file_path = f"{base_filename}{extension}"
+                
+                # Create the file
+                result = await self.code_generator.create_file(
+                    file_path,
+                    code_block['code'],
+                    f"Generated from: {user_input[:50]}...",
+                    overwrite=False
+                )
+                
+                if result['success']:
+                    created_files.append({
+                        'path': result['path'],
+                        'size': result.get('size', 0),
+                        'lines': result.get('lines', 0)
+                    })
+                else:
+                    print(f"[DEBUG] Failed to create file: {result.get('error', 'Unknown error')}")
+                    
+        except Exception as e:
+            print(f"[DEBUG] Error creating files from code blocks: {str(e)}")
+            
+        return created_files
