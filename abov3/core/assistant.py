@@ -4,6 +4,7 @@ The main AI assistant that processes user requests and coordinates with other sy
 """
 
 import asyncio
+import re
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from datetime import datetime
 import json
