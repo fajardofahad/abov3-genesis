@@ -203,6 +203,8 @@ RULES:
 - Do not offer additional help or ask questions
 - Just generate the requested code
 - DEFAULT LANGUAGE: Generate PYTHON code unless the user explicitly requests another language
+- IMPORTANT: Always include a main section or example usage so the code can be run immediately
+- IMPORTANT: Generate complete, working, tested code that actually solves the problem
 {f'- IMPORTANT: User explicitly requested {language_hint.upper()} code. Generate ONLY {language_hint.upper()} code.' if language_hint else ''}
 
 Example:
@@ -233,6 +235,37 @@ def bubble_sort(arr):
             if arr[j] > arr[j+1]:
                 arr[j], arr[j+1] = arr[j+1], arr[j]
     return arr
+
+if __name__ == "__main__":
+    test_array = [64, 34, 25, 12, 22, 11, 90]
+    print("Original array:", test_array)
+    sorted_array = bubble_sort(test_array.copy())
+    print("Sorted array:", sorted_array)
+```
+
+User: make me a permutation code
+Assistant: ```python
+import itertools
+
+def generate_permutations(items):
+    return list(itertools.permutations(items))
+
+def generate_permutations_manual(items):
+    if len(items) <= 1:
+        return [items]
+    
+    result = []
+    for i in range(len(items)):
+        remaining = items[:i] + items[i+1:]
+        for perm in generate_permutations_manual(remaining):
+            result.append([items[i]] + perm)
+    return result
+
+if __name__ == "__main__":
+    items = ['A', 'B', 'C']
+    print("Original items:", items)
+    print("Permutations (itertools):", generate_permutations(items))
+    print("Permutations (manual):", generate_permutations_manual(items))
 ```
 
 Nothing more, nothing less."""
