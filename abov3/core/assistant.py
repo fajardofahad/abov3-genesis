@@ -965,16 +965,16 @@ Only show files that actually need changes."""
                                 'lines': result['lines']
                             })
                 
-                # Return only file creation summary if files were created, otherwise return AI response
+                # Return both AI response and file creation summary if files were created
                 if created_files:
-                    file_summary = "📁 **Files Created:**\n"
+                    file_summary = "\n\n📁 **Files Created:**\n"
                     for file_info in created_files:
                         file_summary += f"✅ `{file_info['path']}` ({file_info['lines']} lines, {file_info['size']} bytes)\n"
                     
                     file_summary += "\n🎯 **Files are ready in your project directory!**"
-                    return file_summary  # Return only the file summary, not the verbose AI response
+                    return ai_response + file_summary  # Return both AI response AND file summary
             
-            # Only return AI response if no files were created
+            # Return AI response if no files were created
             return ai_response
             
         except Exception as e:
