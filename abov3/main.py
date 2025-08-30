@@ -85,6 +85,7 @@ class ABOV3Genesis:
         self.current_task = None
         self.task_queue = asyncio.Queue()
         self.interrupt_requested = False
+        self.exit_requested = False
         
         # Background tasks
         self.background_tasks = []
@@ -775,7 +776,9 @@ class ABOV3Genesis:
                 
                 # Handle special commands
                 if user_input.startswith('/'):
-                    await self.handle_command(user_input)
+                    result = await self.handle_command(user_input)
+                    if result is True:  # Exit requested
+                        break
                     continue
                 
                 # Check for Genesis commands
@@ -790,13 +793,16 @@ class ABOV3Genesis:
                     await self.process_input(user_input)
                     
             except KeyboardInterrupt:
-                if self.interrupt_requested:
+                if self.exit_requested:
+                    break
+                elif self.interrupt_requested:
                     if await self.confirm_exit():
                         break
                     else:
                         self.interrupt_requested = False
             except EOFError:
-                break
+                if await self.confirm_exit():
+                    break
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
         
@@ -1015,7 +1021,8 @@ class ABOV3Genesis:
             console.clear()
         elif cmd == '/exit':
             if await self.confirm_exit():
-                raise KeyboardInterrupt()
+                self.exit_requested = True
+                return True  # Signal to exit
         elif cmd == '/genesis':
             await self.show_genesis_status()
         elif cmd == '/vibe':
