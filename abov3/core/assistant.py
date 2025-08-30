@@ -1021,53 +1021,45 @@ Only show files that actually need changes."""
         import re
         
         print(f"[DEBUG] Extracting code blocks from text length: {len(text)}")
+        print(f"[DEBUG] Text preview: '{text[:100]}...'")
         
-        # Pattern to match code blocks with language specification
-        pattern = r'```(\w+)?\n(.*?)```'
-        matches = re.findall(pattern, text, re.DOTALL)
-        
-        print(f"[DEBUG] Found {len(matches)} markdown code blocks")
+        # Multiple patterns to match different markdown code block formats
+        patterns = [
+            r'```(\w+)?\n(.*?)```',  # Standard: ```python\ncode```
+            r'```(\w+)?\r?\n(.*?)```',  # With carriage returns
+            r'```(\w+)\s+(.*?)```',  # With space: ```python code```
+            r'```\s*(\w+)?\s*\n(.*?)\n```'  # Flexible whitespace
+        ]
         
         code_blocks = []
-        for language, code in matches:
-            code_blocks.append({
-                'language': language or 'text',
-                'code': code.strip()
-            })
-            print(f"[DEBUG] Code block: language='{language}', code_length={len(code.strip())}")
-        
-        # Also look for inline code that might be complete files
-        if not code_blocks:
-            # Look for code patterns without markdown
-            lines = text.split('\n')
-            potential_code = []
-            in_code_section = False
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.DOTALL | re.MULTILINE)
+            print(f"[DEBUG] Pattern '{pattern}' found {len(matches)} matches")
             
-            for line in lines:
-                # Common code indicators - prioritize Python patterns
-                if any(indicator in line for indicator in ['def ', 'class ', 'import ', 'from ', 'print(', 'if ', 'for ', 'while ', 'function', 'var ', 'const ', '#!/']):
-                    in_code_section = True
+            for language, code in matches:
+                # Clean up the code - remove any remaining markdown
+                clean_code = code.strip()
+                # Remove any remaining ``` markers that might have been missed
+                clean_code = re.sub(r'^```.*$', '', clean_code, flags=re.MULTILINE)
+                clean_code = clean_code.strip()
                 
-                if in_code_section:
-                    potential_code.append(line)
-                
-                # End of code section
-                if line.strip() == '' and in_code_section and len(potential_code) > 3:
-                    in_code_section = False
-                    if potential_code:
-                        # Detect language from code content - defaults to Python
-                        code_content = '\n'.join(potential_code)
-                        detected_lang = self._detect_language_from_code(code_content)
-                        code_blocks.append({
-                            'language': detected_lang,
-                            'code': code_content.strip()
-                        })
-                        potential_code = []
+                if clean_code and len(clean_code) > 5:  # Must have substantial content
+                    code_blocks.append({
+                        'language': language or 'python',  # Default to python
+                        'code': clean_code
+                    })
+                    print(f"[DEBUG] Code block: language='{language}', code_length={len(clean_code)}")
+                    break  # Found code, stop trying other patterns
         
-        # If still no code blocks found but text looks like code, treat entire response as code
-        if not code_blocks and len(text) > 50:
-            # Check if the text contains any code-like patterns
-            # Look for ANY code patterns and default to Python
+        # If no markdown code blocks found, look for code without markdown
+        if not code_blocks:
+            print("[DEBUG] No markdown blocks found, looking for raw code...")
+            
+            # Remove any stray ``` markers first
+            clean_text = re.sub(r'^```.*$', '', text, flags=re.MULTILINE)
+            clean_text = clean_text.strip()
+            
+            # Check if the cleaned text contains code patterns
             code_patterns = [
                 # Python patterns (check first since it's our default)
                 'def ', 'class ', 'import ', 'from ', 'if __name__', 'print(', 'return ', 
@@ -1076,13 +1068,14 @@ Only show files that actually need changes."""
                 'function ', 'const ', 'let ', 'var ', '<html', '<div',
                 'public class', '#include'
             ]
-            if any(pattern in text for pattern in code_patterns):
-                detected_lang = self._detect_language_from_code(text)
+            
+            if any(pattern in clean_text for pattern in code_patterns):
+                detected_lang = self._detect_language_from_code(clean_text)
                 code_blocks.append({
                     'language': detected_lang,
-                    'code': text.strip()
+                    'code': clean_text
                 })
-                print(f"[DEBUG] Treating entire response as {detected_lang} code")
+                print(f"[DEBUG] Treating cleaned text as {detected_lang} code")
         
         return code_blocks
     
