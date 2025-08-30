@@ -12,6 +12,7 @@ from .ollama_client import OllamaClient
 from .code_generator import CodeGenerator
 from .project_intelligence import ProjectIntelligence
 from .app_generator import FullApplicationGenerator
+from .file_namer import AIFileNamer
 
 class Assistant:
     """
@@ -36,12 +37,14 @@ class Assistant:
         self.code_generator = None
         self.project_intelligence = None
         self.app_generator = None
+        self.file_namer = None
         if project_context and 'project_path' in project_context:
             from pathlib import Path
             project_path = Path(project_context['project_path'])
             self.code_generator = CodeGenerator(project_path)
             self.project_intelligence = ProjectIntelligence(project_path)
             self.app_generator = FullApplicationGenerator(project_path)
+            self.file_namer = AIFileNamer(ollama_client=self.ollama_client)
     
     async def process(self, user_input: str, context: Dict[str, Any] = None) -> str:
         """Process user input and return response"""
@@ -57,6 +60,7 @@ class Assistant:
                     self.code_generator = CodeGenerator(project_path)
                     self.project_intelligence = ProjectIntelligence(project_path)
                     self.app_generator = FullApplicationGenerator(project_path)
+                    self.file_namer = AIFileNamer(ollama_client=self.ollama_client)
                     print(f"[DEBUG] Initialized all generators with path: {context['project_path']}")
                 elif 'project_path' in context and self.code_generator:
                     # Update if project path changed
@@ -66,6 +70,7 @@ class Assistant:
                         self.code_generator = CodeGenerator(new_path)
                         self.project_intelligence = ProjectIntelligence(new_path)
                         self.app_generator = FullApplicationGenerator(new_path)
+                        self.file_namer = AIFileNamer(ollama_client=self.ollama_client)
                         print(f"[DEBUG] Updated all generators with new path: {context['project_path']}")
                 else:
                     print(f"[DEBUG] Context: {context}, Code generator exists: {self.code_generator is not None}")
@@ -1950,72 +1955,86 @@ Focus only on what is explicitly mentioned or clearly implied. If something is n
         self.agent_manager = agent_manager
     
     async def _create_files_from_code_blocks(self, code_blocks: List[Dict[str, str]], user_input: str, ai_response: str) -> List[Dict[str, Any]]:
-        """Create files from extracted code blocks"""
+        """Create files from extracted code blocks using AI-powered naming"""
         created_files = []
         
         try:
-            for i, code_block in enumerate(code_blocks):
-                # Determine file path based on language
-                language = code_block.get('language', 'text').lower()
-                
-                # Map language to file extension
-                extensions = {
-                    'html': '.html', 'htm': '.html',
-                    'css': '.css', 'scss': '.scss', 'sass': '.sass',
-                    'javascript': '.js', 'js': '.js', 'jsx': '.jsx',
-                    'typescript': '.ts', 'ts': '.ts', 'tsx': '.tsx',
-                    'python': '.py', 'py': '.py',
-                    'java': '.java', 'kotlin': '.kt',
-                    'cpp': '.cpp', 'c++': '.cpp', 'c': '.c',
-                    'csharp': '.cs', 'cs': '.cs', 'c#': '.cs',
-                    'php': '.php', 'ruby': '.rb', 'rb': '.rb',
-                    'go': '.go', 'golang': '.go',
-                    'rust': '.rs', 'rs': '.rs',
-                    'swift': '.swift', 'dart': '.dart',
-                    'sql': '.sql', 'json': '.json', 'xml': '.xml',
-                    'yaml': '.yaml', 'yml': '.yml',
-                    'bash': '.sh', 'sh': '.sh', 'shell': '.sh',
-                    'powershell': '.ps1', 'ps1': '.ps1',
-                    'markdown': '.md', 'md': '.md'
-                }
-                
-                extension = extensions.get(language, '.txt')
-                
-                # Generate meaningful filename based on content or user input
-                user_input_words = user_input.lower().split()
-                
-                # Try to extract a meaningful name from the user input
-                if 'landing' in user_input_words and 'page' in user_input_words:
-                    base_filename = 'index'
-                elif 'coffee' in user_input_words and 'shop' in user_input_words:
-                    base_filename = 'coffee_shop' if i == 0 else f'coffee_shop_{i}'
-                elif 'website' in user_input_words or 'site' in user_input_words:
-                    base_filename = 'index' if i == 0 else f'page_{i}'
-                elif 'app' in user_input_words or 'application' in user_input_words:
-                    base_filename = 'app' if i == 0 else f'app_{i}'
-                else:
-                    base_filename = f'generated_{i}' if i > 0 else 'generated'
-                
-                file_path = f"{base_filename}{extension}"
-                
-                # Create the file
-                result = await self.code_generator.create_file(
-                    file_path,
-                    code_block['code'],
-                    f"Generated from: {user_input[:50]}...",
-                    overwrite=False
+            # Use AI file namer if available, otherwise fall back to simple naming
+            if self.file_namer:
+                print("[DEBUG] Getting AI-recommended file names...")
+                file_structure = await self.file_namer.get_file_names(
+                    code_blocks, 
+                    user_input,
+                    project_type=self._detect_project_type(user_input)
                 )
                 
-                if result['success']:
-                    created_files.append({
-                        'path': result['path'],
-                        'size': result.get('size', 0),
-                        'lines': result.get('lines', 0)
-                    })
-                else:
-                    print(f"[DEBUG] Failed to create file: {result.get('error', 'Unknown error')}")
+                print(f"[DEBUG] AI recommended {len(file_structure)} files")
+                
+                # Create files with AI-recommended names
+                for file_info in file_structure:
+                    file_path = file_info['path']
+                    code = file_info['code']
+                    description = file_info.get('description', f"Generated from: {user_input[:50]}...")
+                    
+                    print(f"[DEBUG] Creating file: {file_path}")
+                    
+                    # Create the file (including directory structure)
+                    result = await self.code_generator.create_file(
+                        file_path,
+                        code,
+                        description,
+                        overwrite=False
+                    )
+                    
+                    if result['success']:
+                        created_files.append({
+                            'path': result['path'],
+                            'size': result.get('size', 0),
+                            'lines': result.get('lines', 0)
+                        })
+                        print(f"[DEBUG] Successfully created: {file_path}")
+                    else:
+                        print(f"[DEBUG] Failed to create file: {result.get('error', 'Unknown error')}")
+            else:
+                # Fallback to simple naming if AI namer not available
+                print("[DEBUG] Using fallback file naming...")
+                for i, code_block in enumerate(code_blocks):
+                    language = code_block.get('language', 'text').lower()
+                    extension = '.html' if language == 'html' else '.css' if language == 'css' else '.js' if language in ['javascript', 'js'] else '.py' if language == 'python' else '.txt'
+                    file_path = f"generated_{i}{extension}" if i > 0 else f"index{extension}"
+                    
+                    result = await self.code_generator.create_file(
+                        file_path,
+                        code_block['code'],
+                        f"Generated from: {user_input[:50]}...",
+                        overwrite=False
+                    )
+                    
+                    if result['success']:
+                        created_files.append({
+                            'path': result['path'],
+                            'size': result.get('size', 0),
+                            'lines': result.get('lines', 0)
+                        })
                     
         except Exception as e:
             print(f"[DEBUG] Error creating files from code blocks: {str(e)}")
             
         return created_files
+    
+    def _detect_project_type(self, user_input: str) -> str:
+        """Detect the type of project from user input"""
+        user_input_lower = user_input.lower()
+        
+        if any(word in user_input_lower for word in ['website', 'landing page', 'homepage', 'portfolio']):
+            return 'website'
+        elif any(word in user_input_lower for word in ['web app', 'webapp', 'dashboard', 'admin']):
+            return 'webapp'
+        elif any(word in user_input_lower for word in ['api', 'rest', 'backend', 'server']):
+            return 'api'
+        elif any(word in user_input_lower for word in ['python app', 'python script', 'python project']):
+            return 'python-app'
+        elif any(word in user_input_lower for word in ['react', 'vue', 'angular']):
+            return 'webapp'
+        else:
+            return 'website'  # default
