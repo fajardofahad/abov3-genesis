@@ -128,6 +128,8 @@ class Assistant:
             else:
                 # Get AI response
                 response_text = await self._get_ai_response(model, messages)
+                print(f"[DEBUG] AI response received, length: {len(response_text)}")
+                print(f"[DEBUG] AI response preview: '{response_text[:200]}...'")
                 
                 # Check if the AI response contains code blocks that should be written to files
                 if self.code_generator:
@@ -144,6 +146,7 @@ class Assistant:
                                 file_summary += f"✅ `{file_info['path']}` ({file_info.get('lines', 0)} lines, {file_info.get('size', 0)} bytes)\n"
                             file_summary += "\n🎯 **Files are ready in your project directory!**"
                             response_text = response_text + file_summary
+                            print(f"[DEBUG] Final response with file summary, length: {len(response_text)}")
             
             # Record interaction for learning if we have project intelligence
             if self.project_intelligence:
@@ -2094,6 +2097,12 @@ Focus only on what is explicitly mentioned or clearly implied. If something is n
         created_files = []
         
         try:
+            # Debug: Show what we're working with
+            print(f"[DEBUG] Creating files - user_input: '{user_input}'")
+            print(f"[DEBUG] AI response preview: '{ai_response[:100]}...'")
+            for i, block in enumerate(code_blocks):
+                print(f"[DEBUG] Code block {i}: language='{block.get('language')}', code_preview='{block.get('code', '')[:50]}...'")
+            
             # Use AI file namer if available, otherwise fall back to simple naming
             if self.file_namer:
                 print("[DEBUG] Getting AI-recommended file names...")
@@ -2104,6 +2113,8 @@ Focus only on what is explicitly mentioned or clearly implied. If something is n
                 )
                 
                 print(f"[DEBUG] AI recommended {len(file_structure)} files")
+                for i, file_info in enumerate(file_structure):
+                    print(f"[DEBUG] File {i}: path='{file_info.get('path')}'")
                 
                 # Create files with AI-recommended names
                 for file_info in file_structure:
