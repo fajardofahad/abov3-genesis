@@ -1283,13 +1283,16 @@ class ABOV3Genesis:
             return
         
         # Security validation if available
-        # Skip security for simple code generation requests
-        is_code_generation = any(keyword in user_input.lower() for keyword in [
-            'make me', 'create', 'generate', 'write', 'code', 'hello world',
-            'html', 'python', 'javascript', 'css', 'build'
+        # Only apply security to potentially dangerous inputs
+        is_potentially_dangerous = any(keyword in user_input.lower() for keyword in [
+            'rm -rf', 'delete system', 'format', 'drop table', 'drop database',
+            '../..', 'etc/passwd', 'cmd.exe', 'powershell -c',
+            '<script', 'javascript:', 'onclick', 'onerror',
+            'exec(', 'eval(', '__import__', 'subprocess',
+            'os.system', 'shell=true'
         ])
         
-        if self.security_integration and not is_code_generation:
+        if self.security_integration and is_potentially_dangerous:
             validation_result = await self.security_integration.secure_user_input(
                 user_input, 'text', {'client_id': 'main_interface', 'authenticated': True}
             )
