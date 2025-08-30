@@ -128,17 +128,28 @@ class AIFileNamer:
         features = []
         for block in code_blocks[:3]:  # Analyze first 3 blocks
             code_snippet = block['code'][:500]  # First 500 chars
-            if 'class' in code_snippet or 'function' in code_snippet:
+            if 'def ' in code_snippet or 'class ' in code_snippet:
                 features.append('contains functions/classes')
+            if 'function' in code_snippet or '=>' in code_snippet:
+                features.append('JavaScript functions')
             if '<html' in code_snippet.lower():
                 features.append('HTML page')
-            if 'import' in code_snippet or 'require' in code_snippet:
-                features.append('has dependencies')
+            if 'import' in code_snippet or 'from ' in code_snippet:
+                features.append('Python imports')
+            if 'require' in code_snippet:
+                features.append('Node.js dependencies')
+        
+        # Detect if this is specifically a Python request or default to Python
+        is_python_request = 'python' in user_input.lower() or any(lang in ['python', 'text', 'unknown'] for lang in languages)
+        # Default to Python if no specific language is detected
+        if not any(lang in ['html', 'css', 'javascript', 'java', 'cpp', 'c', 'csharp'] for lang in languages):
+            is_python_request = True
         
         prompt = f"""You are a senior developer expert in file naming conventions and project structure.
 
 User Request: "{user_input}"
-Project Type: {project_type or 'general web project'}
+Project Type: {project_type or 'python script'}
+Default Language: Python (unless user specified otherwise)
 Number of code blocks: {len(code_blocks)}
 Languages detected: {', '.join(set(languages))}
 Code features: {', '.join(features) if features else 'standard code'}
@@ -153,12 +164,15 @@ Based on this information, suggest professional file names and directory structu
 Respond with a JSON structure like this:
 {{
     "files": [
-        {{"index": 0, "path": "index.html", "description": "Main landing page"}},
+        {{"index": 0, "path": "permutations.py", "description": "Python permutation generator"}},
         {{"index": 1, "path": "css/styles.css", "description": "Main stylesheet"}},
         {{"index": 2, "path": "js/main.js", "description": "Main JavaScript file"}}
     ],
     "structure_explanation": "Brief explanation of the naming choices"
 }}
+
+For Python files, use snake_case naming (e.g., permutation_generator.py, data_processor.py).
+For web files, use appropriate conventions (index.html for main pages, styles.css for CSS).
 
 Provide ONLY the JSON response, no additional text."""
         
@@ -256,12 +270,39 @@ Provide ONLY the JSON response, no additional text."""
             if i == 0:  # First file is usually the main file
                 if language == 'html':
                     base_name = 'index'
-                elif language in ['python', 'javascript', 'java']:
+                elif language in ['python', 'text', 'unknown']:
+                    # Smart Python naming based on content
+                    if 'permutation' in user_input_lower:
+                        base_name = 'permutations'
+                    elif 'combination' in user_input_lower:
+                        base_name = 'combinations'
+                    elif 'fibonacci' in user_input_lower:
+                        base_name = 'fibonacci'
+                    elif 'calculator' in user_input_lower:
+                        base_name = 'calculator'
+                    elif 'sort' in user_input_lower:
+                        base_name = 'sorting'
+                    elif 'search' in user_input_lower:
+                        base_name = 'search_algorithm'
+                    elif 'algorithm' in user_input_lower:
+                        base_name = 'algorithm'
+                    elif 'game' in user_input_lower:
+                        base_name = 'game'
+                    elif 'server' in user_input_lower:
+                        base_name = 'server'
+                    elif 'api' in user_input_lower:
+                        base_name = 'api'
+                    elif 'test' in user_input_lower:
+                        base_name = 'test_script'
+                    else:
+                        base_name = 'main'
+                elif language in ['javascript', 'java']:
                     base_name = 'main'
                 elif language == 'css':
                     base_name = 'styles'
                 else:
-                    base_name = 'file'
+                    # Default to Python-style naming for unknown
+                    base_name = 'script'
             else:
                 # Subsequent files
                 if language == 'css':
@@ -291,7 +332,10 @@ Provide ONLY the JSON response, no additional text."""
                     base_name = 'portfolio-styles'
             
             # Determine directory structure
-            if language == 'css':
+            if language == 'python':
+                # Python files usually go in the root or src directory
+                path = f'{base_name}{extension}'
+            elif language == 'css':
                 path = f'css/{base_name}{extension}'
             elif language in ['javascript', 'js', 'typescript', 'ts']:
                 path = f'js/{base_name}{extension}'
@@ -310,13 +354,13 @@ Provide ONLY the JSON response, no additional text."""
         return file_structure
     
     def _get_extension(self, language: str) -> str:
-        """Get file extension for a language"""
+        """Get file extension for a language - defaults to .py"""
         extensions = {
             'html': '.html', 'htm': '.html',
             'css': '.css', 'scss': '.scss', 'sass': '.sass',
             'javascript': '.js', 'js': '.js', 'jsx': '.jsx',
             'typescript': '.ts', 'ts': '.ts', 'tsx': '.tsx',
-            'python': '.py', 'py': '.py',
+            'python': '.py', 'py': '.py', 'unknown': '.py', 'text': '.py',
             'java': '.java', 'kotlin': '.kt', 'kt': '.kt',
             'cpp': '.cpp', 'c++': '.cpp', 'c': '.c',
             'csharp': '.cs', 'cs': '.cs', 'c#': '.cs',
@@ -329,9 +373,10 @@ Provide ONLY the JSON response, no additional text."""
             'bash': '.sh', 'sh': '.sh', 'shell': '.sh',
             'powershell': '.ps1', 'ps1': '.ps1',
             'markdown': '.md', 'md': '.md',
-            'text': '.txt', 'txt': '.txt'
+            'txt': '.txt'
         }
-        return extensions.get(language.lower(), '.txt')
+        # Default to .py for Python as the default language
+        return extensions.get(language.lower(), '.py')
     
     def suggest_project_structure(self, project_type: str) -> Dict[str, List[str]]:
         """Suggest a complete project directory structure"""

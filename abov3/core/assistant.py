@@ -92,7 +92,7 @@ class Assistant:
             
             # Get model and system prompt from agent
             model = self.agent.model if self.agent else self.default_model
-            system_prompt = self._build_system_prompt()
+            system_prompt = self._build_system_prompt(user_input)
             
             # Check if Ollama is available
             if not await self.ollama_client.is_available():
@@ -178,9 +178,16 @@ class Assistant:
         user_input_lower = user_input.lower()
         return any(trigger in user_input_lower for trigger in analysis_triggers)
     
-    def _build_system_prompt(self) -> str:
+    def _build_system_prompt(self, user_input: str = "") -> str:
         """Build the system prompt with context"""
-        base_prompt = """You are ABOV3 Genesis, a code generation assistant.
+        # Detect requested language from user input
+        language_hint = self._detect_requested_language(user_input)
+        
+        # Default to Python if no specific language is requested
+        if not language_hint and self._is_code_generation_request(user_input):
+            language_hint = 'python'
+        
+        base_prompt = f"""You are ABOV3 Genesis, a code generation assistant.
 
 RULES:
 - Be extremely concise and direct
@@ -191,8 +198,15 @@ RULES:
 - Do not explain what the code does unless specifically asked
 - Do not offer additional help or ask questions
 - Just generate the requested code
+- DEFAULT LANGUAGE: Generate PYTHON code unless the user explicitly requests another language
+{f'- IMPORTANT: User explicitly requested {language_hint.upper()} code. Generate ONLY {language_hint.upper()} code.' if language_hint else ''}
 
 Example:
+User: make me a hello world
+Assistant: ```python
+print("Hello, World!")
+```
+
 User: make me an html hello world
 Assistant: ```html
 <!DOCTYPE html>
@@ -204,6 +218,17 @@ Assistant: ```html
     <h1>Hello, World!</h1>
 </body>
 </html>
+```
+
+User: create a sorting algorithm
+Assistant: ```python
+def bubble_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        for j in range(0, n-i-1):
+            if arr[j] > arr[j+1]:
+                arr[j], arr[j+1] = arr[j+1], arr[j]
+    return arr
 ```
 
 Nothing more, nothing less."""
@@ -749,6 +774,21 @@ Only show files that actually need changes."""
     async def _handle_new_file_creation(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
         """Handle creation of new files using AI-powered naming"""
         try:
+            # Update system prompt with language hint if needed
+            language_hint = self._detect_requested_language(user_input)
+            if not language_hint:
+                # Default to Python if no specific language requested
+                language_hint = 'python'
+                
+            # Modify the system message to enforce the requested/default language
+            for msg in messages:
+                if msg['role'] == 'system':
+                    if language_hint == 'python' and not self._detect_requested_language(user_input):
+                        msg['content'] += f"\n\nIMPORTANT: Generate PYTHON code by default. The user asked for code but didn't specify a language, so generate Python code."
+                    else:
+                        msg['content'] += f"\n\nIMPORTANT: The user has explicitly requested {language_hint.upper()} code. You MUST generate {language_hint.upper()} code, not any other language."
+                    break
+            
             # Get AI response for the code
             ai_response = await self._get_ai_response(model, messages)
             
@@ -967,8 +1007,8 @@ Only show files that actually need changes."""
             in_code_section = False
             
             for line in lines:
-                # Common code indicators
-                if any(indicator in line for indicator in ['def ', 'class ', 'import ', 'function', 'var ', 'const ', '#!/']):
+                # Common code indicators - prioritize Python patterns
+                if any(indicator in line for indicator in ['def ', 'class ', 'import ', 'from ', 'print(', 'if ', 'for ', 'while ', 'function', 'var ', 'const ', '#!/']):
                     in_code_section = True
                 
                 if in_code_section:
@@ -978,7 +1018,7 @@ Only show files that actually need changes."""
                 if line.strip() == '' and in_code_section and len(potential_code) > 3:
                     in_code_section = False
                     if potential_code:
-                        # Detect language from code content
+                        # Detect language from code content - defaults to Python
                         code_content = '\n'.join(potential_code)
                         detected_lang = self._detect_language_from_code(code_content)
                         code_blocks.append({
@@ -989,8 +1029,17 @@ Only show files that actually need changes."""
         
         # If still no code blocks found but text looks like code, treat entire response as code
         if not code_blocks and len(text) > 50:
-            # Check if the text contains code patterns
-            if any(pattern in text for pattern in ['def ', 'class ', 'import ', 'from ', 'if __name__', 'print(', 'return ']):
+            # Check if the text contains any code-like patterns
+            # Look for ANY code patterns and default to Python
+            code_patterns = [
+                # Python patterns (check first since it's our default)
+                'def ', 'class ', 'import ', 'from ', 'if __name__', 'print(', 'return ', 
+                'for ', 'while ', 'if ', 'else:', 'elif ', 'try:', 'except:',
+                # Other language patterns
+                'function ', 'const ', 'let ', 'var ', '<html', '<div',
+                'public class', '#include'
+            ]
+            if any(pattern in text for pattern in code_patterns):
                 detected_lang = self._detect_language_from_code(text)
                 code_blocks.append({
                     'language': detected_lang,
@@ -1001,30 +1050,94 @@ Only show files that actually need changes."""
         return code_blocks
     
     def _detect_language_from_code(self, code: str) -> str:
-        """Detect programming language from code content"""
+        """Detect programming language from code content - defaults to Python"""
         code_lower = code.lower()
         
-        # Python patterns
-        if any(pattern in code for pattern in ['def ', 'import ', 'from ', 'if __name__', 'print(', 'class ', 'self.']):
-            return 'python'
-        # JavaScript patterns
-        elif any(pattern in code for pattern in ['function ', 'const ', 'let ', 'var ', 'console.log', '=>', 'async ', 'await ']):
-            return 'javascript'
-        # HTML patterns
-        elif any(pattern in code_lower for pattern in ['<html', '<body', '<div', '<h1', '<p>', '<!doctype']):
+        # HTML patterns (check first as it's very distinctive)
+        if any(pattern in code_lower for pattern in ['<html', '<body', '<div', '<h1', '<p>', '<!doctype', '<head>', '<title>']):
             return 'html'
         # CSS patterns
-        elif any(pattern in code for pattern in ['{', '}', ':', ';']) and any(pattern in code_lower for pattern in ['color:', 'margin:', 'padding:', 'font-', 'background:']):
+        elif any(pattern in code for pattern in ['{', '}', ':', ';']) and any(pattern in code_lower for pattern in ['color:', 'margin:', 'padding:', 'font-', 'background:', 'display:', 'position:']):
             return 'css'
+        # JavaScript patterns (be more specific to avoid false positives)
+        elif any(pattern in code for pattern in ['console.log', 'document.', 'window.', 'getElementById', 'addEventListener', 'function(', '=>', 'const ', 'let ', 'var ']) and 'def ' not in code:
+            return 'javascript'
         # Java patterns
-        elif any(pattern in code for pattern in ['public class', 'public static', 'System.out.', 'void main']):
+        elif any(pattern in code for pattern in ['public class', 'public static', 'System.out.', 'void main', 'package ', 'import java']):
             return 'java'
         # C/C++ patterns
-        elif any(pattern in code for pattern in ['#include', 'int main(', 'printf(', 'cout <<', 'cin >>']):
+        elif any(pattern in code for pattern in ['#include', 'int main(', 'printf(', 'cout <<', 'cin >>', 'std::', 'using namespace']):
             return 'cpp'
-        # Default to Python for general code
+        # Python patterns or default
         else:
+            # Default to Python for any code-like content
             return 'python'
+    
+    def _detect_requested_language(self, user_input: str) -> Optional[str]:
+        """Detect if user explicitly requested a specific programming language"""
+        user_input_lower = user_input.lower()
+        
+        # Language patterns to detect
+        language_patterns = {
+            'python': ['python', 'py script', 'python code', 'python script', 'python program', '.py file'],
+            'javascript': ['javascript', 'js code', 'js script', 'node.js', 'nodejs'],
+            'html': ['html', 'html page', 'html file', 'webpage', 'web page'],
+            'css': ['css', 'stylesheet', 'style sheet', 'css file'],
+            'java': ['java code', 'java program', 'java class'],
+            'cpp': ['c++', 'cpp', 'c++ code', 'c++ program'],
+            'c': ['c code', 'c program', ' c file'],
+            'csharp': ['c#', 'csharp', 'c# code'],
+            'php': ['php', 'php code', 'php script'],
+            'ruby': ['ruby', 'ruby code', 'ruby script'],
+            'go': ['go code', 'golang', 'go program'],
+            'rust': ['rust', 'rust code', 'rust program'],
+            'typescript': ['typescript', 'ts code', 'ts file'],
+            'sql': ['sql', 'sql query', 'database query'],
+            'bash': ['bash', 'shell script', 'bash script'],
+            'powershell': ['powershell', 'ps1', 'powershell script']
+        }
+        
+        # Check for explicit language mentions
+        for language, patterns in language_patterns.items():
+            for pattern in patterns:
+                if pattern in user_input_lower:
+                    print(f"[DEBUG] Detected language request: {language}")
+                    return language
+        
+        # Check for "make me a X" patterns
+        make_patterns = re.findall(r'make (?:me )?(?:a |an )?(\w+)', user_input_lower)
+        for word in make_patterns:
+            for language, patterns in language_patterns.items():
+                if word in patterns or word == language:
+                    print(f"[DEBUG] Detected language from 'make' pattern: {language}")
+                    return language
+        
+        # Check for file extension mentions
+        extension_map = {
+            '.py': 'python',
+            '.js': 'javascript',
+            '.html': 'html',
+            '.css': 'css',
+            '.java': 'java',
+            '.cpp': 'cpp',
+            '.c': 'c',
+            '.cs': 'csharp',
+            '.php': 'php',
+            '.rb': 'ruby',
+            '.go': 'go',
+            '.rs': 'rust',
+            '.ts': 'typescript',
+            '.sql': 'sql',
+            '.sh': 'bash',
+            '.ps1': 'powershell'
+        }
+        
+        for ext, language in extension_map.items():
+            if ext in user_input_lower:
+                print(f"[DEBUG] Detected language from extension: {language}")
+                return language
+        
+        return None
     
     def _extract_file_paths(self, user_input: str) -> List[str]:
         """Extract file paths from user input"""
