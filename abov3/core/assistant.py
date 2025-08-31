@@ -7,6 +7,7 @@ import asyncio
 import re
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from datetime import datetime
+from pathlib import Path
 import json
 
 from .ollama_client import OllamaClient
