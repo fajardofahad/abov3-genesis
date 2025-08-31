@@ -15,6 +15,16 @@ from .project_intelligence import ProjectIntelligence
 from .app_generator import FullApplicationGenerator
 from .file_namer import AIFileNamer
 
+# Import debug module components
+try:
+    from .enterprise_debugger import EnterpriseDebugEngine
+    from .enhanced_ml_debugger import get_enhanced_debugger
+    from .secure_debugger import SecureDebugger
+    DEBUG_MODULE_AVAILABLE = True
+except ImportError:
+    print("[DEBUG] Debug module not available - continuing without debugging features")
+    DEBUG_MODULE_AVAILABLE = False
+
 class Assistant:
     """
     ABOV3 Genesis Core Assistant
@@ -39,6 +49,8 @@ class Assistant:
         self.project_intelligence = None
         self.app_generator = None
         self.file_namer = None
+        self.debug_engine = None
+        
         if project_context and 'project_path' in project_context:
             from pathlib import Path
             project_path = Path(project_context['project_path'])
@@ -46,6 +58,15 @@ class Assistant:
             self.project_intelligence = ProjectIntelligence(project_path)
             self.app_generator = FullApplicationGenerator(project_path)
             self.file_namer = AIFileNamer(ollama_client=self.ollama_client)
+            
+            # Initialize debug engine if available
+            if DEBUG_MODULE_AVAILABLE:
+                try:
+                    self.debug_engine = get_enhanced_debugger()
+                    print(f"[DEBUG] Enterprise debug engine initialized for project: {project_path}")
+                except Exception as e:
+                    print(f"[DEBUG] Failed to initialize debug engine: {e}")
+                    self.debug_engine = None
     
     async def process(self, user_input: str, context: Dict[str, Any] = None) -> str:
         """Process user input and return response"""
@@ -1405,10 +1426,227 @@ Only show files that actually need changes."""
         
         return False
     
-    async def _handle_debug_request(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
-        """Handle debugging and error fixing requests"""
-        if not self.code_generator:
-            return "❌ Debugging requires a project directory. Please set up a project first."
+    async def _handle_enterprise_debug_request(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Handle debugging requests using the enterprise debug engine"""
+        try:
+            from pathlib import Path
+            project_path = Path(self.code_generator.project_path)
+            
+            print(f"[DEBUG] Enterprise debug engine processing: {user_input[:50]}...")
+            
+            # Detect if this is a natural language debug query
+            nl_query_patterns = [
+                'why is', 'what is causing', 'how do i fix', 'what\'s wrong', 
+                'why does', 'how can i', 'where is the', 'find the problem'
+            ]
+            
+            is_nl_query = any(pattern in user_input.lower() for pattern in nl_query_patterns)
+            
+            if is_nl_query:
+                # Use natural language debugging
+                response = await self._process_nl_debug_query(user_input, project_path)
+                return response
+            
+            # Check if user mentioned specific files or errors
+            mentioned_files = self._extract_file_paths(user_input)
+            
+            if mentioned_files:
+                # Analyze specific files
+                response = await self._analyze_specific_files(mentioned_files, user_input, project_path)
+                return response
+            
+            # General debugging - analyze recent files or common issues
+            response = await self._perform_general_debug_analysis(user_input, project_path)
+            return response
+            
+        except Exception as e:
+            print(f"[DEBUG] Enterprise debug engine error: {e}")
+            # Fallback to basic debugging
+            return await self._handle_basic_debug_request(user_input, messages, model)
+    
+    async def _process_nl_debug_query(self, query: str, project_path: Path) -> str:
+        """Process natural language debug queries"""
+        try:
+            # Find relevant code files
+            code_files = []
+            for ext in ['.py', '.js', '.ts', '.java', '.cpp', '.c']:
+                code_files.extend(list(project_path.glob(f'**/*{ext}')))
+            
+            # Limit to most recent or important files
+            if len(code_files) > 10:
+                code_files = sorted(code_files, key=lambda f: f.stat().st_mtime, reverse=True)[:10]
+            
+            # Use the debug engine to process the query
+            if self.debug_engine:
+                from .nl_debug_interface import process_debug_query
+                
+                # Read relevant code
+                code_context = {}
+                for file_path in code_files:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            code_context[str(file_path.relative_to(project_path))] = f.read()
+                    except Exception:
+                        continue
+                
+                # Process with natural language interface
+                response = await process_debug_query(
+                    query=query,
+                    code_context=code_context,
+                    project_path=str(project_path)
+                )
+                
+                return self._format_debug_response(response, "Natural Language Debug Analysis")
+            
+            return "🔍 Natural language debugging not available. Using basic analysis..."
+            
+        except Exception as e:
+            return f"❌ Error in natural language debugging: {str(e)}"
+    
+    async def _analyze_specific_files(self, file_paths: List[str], query: str, project_path: Path) -> str:
+        """Analyze specific files mentioned by the user"""
+        try:
+            analysis_results = []
+            
+            for file_name in file_paths:
+                # Find the file in the project
+                found_files = list(project_path.glob(f'**/{file_name}'))
+                
+                for file_path in found_files:
+                    if file_path.is_file():
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                code = f.read()
+                            
+                            # Use debug engine to analyze
+                            if self.debug_engine:
+                                analysis = self.debug_engine.analyze_code_quality(code, str(file_path))
+                                analysis_results.append({
+                                    'file': str(file_path.relative_to(project_path)),
+                                    'analysis': analysis
+                                })
+                        except Exception as e:
+                            analysis_results.append({
+                                'file': str(file_path.relative_to(project_path)),
+                                'error': f"Could not analyze: {str(e)}"
+                            })
+            
+            if analysis_results:
+                return self._format_file_analysis_response(analysis_results, query)
+            else:
+                return f"❌ Could not find or analyze the specified files: {', '.join(file_paths)}"
+                
+        except Exception as e:
+            return f"❌ Error analyzing files: {str(e)}"
+    
+    async def _perform_general_debug_analysis(self, query: str, project_path: Path) -> str:
+        """Perform general debugging analysis on the project"""
+        try:
+            # Find Python files (primary focus)
+            py_files = list(project_path.glob('**/*.py'))
+            
+            if not py_files:
+                return "❌ No Python files found in the project to debug."
+            
+            # Analyze most recently modified files
+            recent_files = sorted(py_files, key=lambda f: f.stat().st_mtime, reverse=True)[:5]
+            
+            issues_found = []
+            
+            for file_path in recent_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        code = f.read()
+                    
+                    # Use debug engine for comprehensive analysis
+                    if self.debug_engine:
+                        analysis = self.debug_engine.analyze_code_quality(code, str(file_path))
+                        
+                        if analysis.get('issues'):
+                            issues_found.append({
+                                'file': str(file_path.relative_to(project_path)),
+                                'issues': analysis['issues']
+                            })
+                            
+                except Exception as e:
+                    print(f"[DEBUG] Error analyzing {file_path}: {e}")
+                    continue
+            
+            return self._format_general_analysis_response(issues_found, query)
+            
+        except Exception as e:
+            return f"❌ Error in general debug analysis: {str(e)}"
+    
+    def _format_debug_response(self, response: Dict, title: str) -> str:
+        """Format debug response for user display"""
+        formatted = f"🔍 **{title}**\n\n"
+        
+        if 'understanding' in response:
+            formatted += f"**Understanding:** {response['understanding']}\n\n"
+        
+        if 'explanation' in response:
+            formatted += f"**Analysis:** {response['explanation']}\n\n"
+        
+        if 'solutions' in response and response['solutions']:
+            formatted += "**Solutions:**\n"
+            for i, solution in enumerate(response['solutions'][:3], 1):
+                formatted += f"{i}. {solution}\n"
+            formatted += "\n"
+        
+        if 'confidence' in response:
+            formatted += f"**Confidence:** {response['confidence']:.1%}\n\n"
+        
+        formatted += "💡 **Tip:** Use specific file names or error messages for more targeted analysis."
+        
+        return formatted
+    
+    def _format_file_analysis_response(self, results: List[Dict], query: str) -> str:
+        """Format file analysis response"""
+        formatted = f"📄 **File Analysis Results**\n\n"
+        
+        for result in results:
+            formatted += f"**File:** `{result['file']}`\n"
+            
+            if 'error' in result:
+                formatted += f"❌ {result['error']}\n\n"
+                continue
+            
+            analysis = result['analysis']
+            if analysis.get('issues'):
+                formatted += f"**Issues Found:** {len(analysis['issues'])}\n"
+                for issue in analysis['issues'][:3]:  # Show top 3 issues
+                    formatted += f"• {issue}\n"
+                formatted += "\n"
+            else:
+                formatted += "✅ No issues found in this file.\n\n"
+        
+        return formatted
+    
+    def _format_general_analysis_response(self, issues_found: List[Dict], query: str) -> str:
+        """Format general analysis response"""
+        if not issues_found:
+            return "✅ **No Issues Found**\n\nYour recent Python files look good! No obvious issues detected."
+        
+        formatted = f"🔍 **Project Debug Analysis**\n\n"
+        formatted += f"Found issues in {len(issues_found)} files:\n\n"
+        
+        for file_info in issues_found:
+            formatted += f"**📄 {file_info['file']}**\n"
+            for issue in file_info['issues'][:3]:  # Show top 3 per file
+                formatted += f"• {issue}\n"
+            formatted += "\n"
+        
+        formatted += "💡 **Next Steps:** Fix the issues above or ask for specific help with any file."
+        
+        return formatted
+    
+    async def _handle_basic_debug_request(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Fallback to basic debug handling"""
+        return await self._handle_debug_request_legacy(user_input, messages, model)
+    
+    async def _handle_debug_request_legacy(self, user_input: str, messages: List[Dict[str, str]], model: str) -> str:
+        """Legacy debugging handler - fallback when enterprise debug is unavailable"""
+        print("[DEBUG] Using legacy debug handler")
         
         try:
             from pathlib import Path
