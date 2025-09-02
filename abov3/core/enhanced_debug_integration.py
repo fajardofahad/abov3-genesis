@@ -202,7 +202,13 @@ class EnhancedDebugIntegration:
         # Optional secure debugger
         self.secure_debugger = None
         if HAS_SECURE_DEBUG:
-            asyncio.create_task(self._init_secure_debugger())
+            # Initialize secure debugger in background if event loop is running
+            try:
+                loop = asyncio.get_running_loop()
+                asyncio.create_task(self._init_secure_debugger())
+            except RuntimeError:
+                # No running loop, skip async initialization
+                logging.debug("No event loop running, skipping async debugger initialization")
         
         # Integration state
         self.active_contexts: Dict[str, DebugContext] = {}
@@ -250,7 +256,7 @@ class EnhancedDebugIntegration:
         """Load integration configuration"""
         config = {
             'auto_resolution_enabled': True,
-            'ml_analysis_enabled': True,
+            'ml_analysis_enabled': False,  # Disabled due to unfitted model issues
             'issue_creation_threshold': ErrorSeverity.HIGH,
             'pattern_learning_enabled': True,
             'security_checks_enabled': self.mode == DebugMode.PRODUCTION,
@@ -398,14 +404,23 @@ class EnhancedDebugIntegration:
         
         return context
     
-    def handle_error_sync(self, error: Exception, context_id: Optional[str] = None, 
+    def handle_error_sync(self, error: Exception, context_data: Optional[Union[str, Dict[str, Any]]] = None, 
                          **kwargs) -> Dict[str, Any]:
         """
         Main entry point for error handling
         Orchestrates all components for comprehensive error resolution
         """
+        # Handle both string context_id and dict context_data
+        context_id = None
+        if isinstance(context_data, str):
+            context_id = context_data
+        elif isinstance(context_data, dict):
+            # If dict is passed, treat it as additional context info
+            kwargs.update(context_data)
+            context_id = context_data.get('context_id')
+        
         # Get or create context
-        if context_id and context_id in self.active_contexts:
+        if context_id and isinstance(context_id, str) and context_id in self.active_contexts:
             context = self.active_contexts[context_id]
         else:
             context = self.create_debug_context()
@@ -429,13 +444,17 @@ class EnhancedDebugIntegration:
             
             # ML analysis
             if self.config['ml_analysis_enabled']:
-                ml_analysis = self.ml_debugger.analyze_error_with_ml(
-                    error,
-                    code_context=kwargs.get('code_context', ''),
-                    **kwargs
-                )
-                result['ml_analysis'] = ml_analysis
-                context.ml_insights['last_analysis'] = ml_analysis
+                try:
+                    ml_analysis = self.ml_debugger.analyze_error_with_ml(
+                        error,
+                        code_context=kwargs.get('code_context', ''),
+                        **kwargs
+                    )
+                    result['ml_analysis'] = ml_analysis
+                    context.ml_insights['last_analysis'] = ml_analysis
+                except (AttributeError, ValueError) as ml_error:
+                    self.logger.warning(f"ML analysis failed: {ml_error}")
+                    result['ml_analysis'] = {}  # Empty ML analysis on failure
             
             # Basic analysis
             basic_analysis = self.debug_engine.analyze_exception(error, **kwargs)
@@ -445,11 +464,11 @@ class EnhancedDebugIntegration:
                 'error': error,
                 'error_id': error_id,
                 'context': context,
-                'analysis': {**basic_analysis, **result['ml_analysis']}
+                'analysis': {**basic_analysis, **result.get('ml_analysis', {})}
             })
             
             # Assess severity
-            severity = self._assess_integrated_severity(error, basic_analysis, result['ml_analysis'])
+            severity = self._assess_integrated_severity(error, basic_analysis, result.get('ml_analysis', {}))
             
             # Auto-resolution attempt
             if self.config['auto_resolution_enabled'] and severity.value <= ErrorSeverity.MEDIUM.value:
@@ -477,7 +496,7 @@ class EnhancedDebugIntegration:
             
             # Generate recommendations
             result['recommendations'] = self._generate_recommendations(
-                error, basic_analysis, result['ml_analysis'], context
+                error, basic_analysis, result.get('ml_analysis', {}), context
             )
             
             # Update metrics
@@ -493,7 +512,9 @@ class EnhancedDebugIntegration:
                 )
             
         except Exception as e:
+            import traceback
             self.logger.error(f"Error handling failed: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             result['error'] = str(e)
         
         return result

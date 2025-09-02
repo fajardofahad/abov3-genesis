@@ -194,10 +194,10 @@ class ErrorPattern:
             )
         
         # Calculate success rate
-        if self.success_metrics['total_applications'] > 0:
+        total_apps = self.success_metrics.get('total_applications', 0)
+        if total_apps > 0:
             self.success_metrics['success_rate'] = (
-                self.success_metrics['successful_applications'] / 
-                self.success_metrics['total_applications']
+                self.success_metrics['successful_applications'] / total_apps
             )
         else:
             self.success_metrics['success_rate'] = 0.0
@@ -461,7 +461,7 @@ class IntelligentFixGenerator:
             strategies.extend(pattern.resolution_strategies)
         
         # AI-generated fixes
-        if self.model and HAS_SKLEARN:
+        if self.model is not None and HAS_SKLEARN and hasattr(self.model, 'estimators_'):
             ai_strategies = self._generate_ai_fixes(error, context)
             strategies.extend(ai_strategies)
         
@@ -581,7 +581,7 @@ class IntelligentFixGenerator:
             features = self._extract_features(error, context)
             
             # Predict fix strategy
-            if self.model and hasattr(self.model, 'predict'):
+            if self.model is not None and hasattr(self.model, 'predict') and hasattr(self.model, 'estimators_'):
                 # This would use a trained model in production
                 # For now, return heuristic-based suggestions
                 pass
@@ -1253,7 +1253,10 @@ class ErrorResolutionEngine:
         # Calculate success rate
         total_resolutions = self.metrics['resolved_errors'] + self.metrics['failed_resolutions']
         if total_resolutions > 0:
-            stats['success_rate'] = self.metrics['resolved_errors'] / total_resolutions
+            if total_resolutions > 0:
+                stats['success_rate'] = self.metrics['resolved_errors'] / total_resolutions
+            else:
+                stats['success_rate'] = 0.0
         else:
             stats['success_rate'] = 0.0
         

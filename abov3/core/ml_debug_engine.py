@@ -11,7 +11,14 @@ import pickle
 import hashlib
 import logging
 import numpy as np
-import pandas as pd
+
+# pandas is optional
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
+    pd = None
 import threading
 import asyncio
 from typing import Any, Dict, List, Optional, Callable, Union, Tuple, Set
@@ -38,10 +45,15 @@ try:
     from sklearn.preprocessing import StandardScaler, LabelEncoder
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import accuracy_score, classification_report
+    from sklearn.exceptions import NotFittedError
     import joblib
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
+    
+    # Define dummy NotFittedError for when sklearn is not available
+    class NotFittedError(Exception):
+        pass
 
 try:
     import torch
@@ -241,15 +253,22 @@ class SemanticCodeAnalyzer:
     def _initialize_models(self):
         """Initialize ML models for code analysis"""
         try:
-            # Initialize models
-            self.complexity_model = RandomForestClassifier(n_estimators=100, random_state=42)
-            self.risk_model = MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+            # Initialize models but don't use them until trained
+            self.complexity_model = None
+            self.risk_model = None
             self.ast_vectorizer = CountVectorizer(max_features=500, analyzer='word')
             
             # Try to load pre-trained models
             self._load_pretrained_models()
+            
+            # If no pre-trained models, create unfitted ones
+            if not self.trained:
+                self.complexity_model = RandomForestClassifier(n_estimators=100, random_state=42)
+                self.risk_model = MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
         except Exception as e:
             logging.warning(f"Failed to initialize semantic models: {e}")
+            self.complexity_model = None
+            self.risk_model = None
     
     def _load_pretrained_models(self):
         """Load pre-trained models if available"""
@@ -287,20 +306,20 @@ class SemanticCodeAnalyzer:
             ast_features = analysis['ast_features']
             
             # Predict complexity and risk if models are trained
-            if self.trained and HAS_SKLEARN:
+            if self.trained and HAS_SKLEARN and self.complexity_model is not None:
                 try:
                     # Check if models are actually fitted
-                    if hasattr(self.complexity_model, 'n_classes_'):
+                    if hasattr(self.complexity_model, 'n_classes_') and hasattr(self.complexity_model, 'estimators_'):
                         feature_vector = self._vectorize_ast_features(ast_features)
                         
                         complexity_pred = self.complexity_model.predict_proba([feature_vector])[0]
                         analysis['complexity_prediction'] = complexity_pred.max()
                         
-                        if hasattr(self.risk_model, 'n_outputs_'):
+                        if self.risk_model is not None and hasattr(self.risk_model, 'classes_'):
                             risk_pred = self.risk_model.predict_proba([feature_vector])[0]
                             analysis['risk_score'] = risk_pred[1] if len(risk_pred) > 1 else risk_pred[0]
-                except (AttributeError, ValueError) as e:
-                    logging.debug(f"Model prediction skipped: {e}")
+                except (AttributeError, ValueError, NotFittedError) as e:
+                    logging.debug(f"Model prediction skipped - models not fitted: {e}")
                     self.trained = False
             
             # Analyze semantic patterns
@@ -693,9 +712,11 @@ class IntelligentFixGenerator:
         """Initialize ML models for fix generation"""
         try:
             self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
-            self.fix_classifier = RandomForestClassifier(n_estimators=200, random_state=42)
+            self.fix_classifier = None  # Don't create until we have training data
         except Exception as e:
             logging.warning(f"Fix generator initialization failed: {e}")
+            self.vectorizer = None
+            self.fix_classifier = None
     
     def generate_fix_suggestions(self, error_msg: str, code_context: str, 
                                error_type: str) -> List[FixSuggestion]:
@@ -802,7 +823,7 @@ class IntelligentFixGenerator:
             input_vector = self.vectorizer.transform([combined_input])
             
             # Predict fix category
-            if hasattr(self.fix_classifier, 'predict_proba') and hasattr(self.fix_classifier, 'classes_'):
+            if self.fix_classifier is not None and hasattr(self.fix_classifier, 'classes_') and hasattr(self.fix_classifier, 'estimators_'):
                 probabilities = self.fix_classifier.predict_proba(input_vector)[0]
                 classes = self.fix_classifier.classes_
                 
@@ -959,6 +980,10 @@ class IntelligentFixGenerator:
                 labels.append(label)
             
             if len(set(labels)) > 1:  # Need at least 2 classes
+                # Create classifier if not exists
+                if self.fix_classifier is None:
+                    self.fix_classifier = RandomForestClassifier(n_estimators=200, random_state=42)
+                
                 # Fit vectorizer and classifier
                 text_vectors = self.vectorizer.fit_transform(texts)
                 self.fix_classifier.fit(text_vectors, labels)
