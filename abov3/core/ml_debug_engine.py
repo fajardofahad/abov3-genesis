@@ -288,13 +288,20 @@ class SemanticCodeAnalyzer:
             
             # Predict complexity and risk if models are trained
             if self.trained and HAS_SKLEARN:
-                feature_vector = self._vectorize_ast_features(ast_features)
-                
-                complexity_pred = self.complexity_model.predict_proba([feature_vector])[0]
-                analysis['complexity_prediction'] = complexity_pred.max()
-                
-                risk_pred = self.risk_model.predict_proba([feature_vector])[0]
-                analysis['risk_score'] = risk_pred[1] if len(risk_pred) > 1 else risk_pred[0]
+                try:
+                    # Check if models are actually fitted
+                    if hasattr(self.complexity_model, 'n_classes_'):
+                        feature_vector = self._vectorize_ast_features(ast_features)
+                        
+                        complexity_pred = self.complexity_model.predict_proba([feature_vector])[0]
+                        analysis['complexity_prediction'] = complexity_pred.max()
+                        
+                        if hasattr(self.risk_model, 'n_outputs_'):
+                            risk_pred = self.risk_model.predict_proba([feature_vector])[0]
+                            analysis['risk_score'] = risk_pred[1] if len(risk_pred) > 1 else risk_pred[0]
+                except (AttributeError, ValueError) as e:
+                    logging.debug(f"Model prediction skipped: {e}")
+                    self.trained = False
             
             # Analyze semantic patterns
             analysis['semantic_patterns'] = self._identify_semantic_patterns(code)
@@ -795,7 +802,7 @@ class IntelligentFixGenerator:
             input_vector = self.vectorizer.transform([combined_input])
             
             # Predict fix category
-            if hasattr(self.fix_classifier, 'predict_proba'):
+            if hasattr(self.fix_classifier, 'predict_proba') and hasattr(self.fix_classifier, 'classes_'):
                 probabilities = self.fix_classifier.predict_proba(input_vector)[0]
                 classes = self.fix_classifier.classes_
                 
