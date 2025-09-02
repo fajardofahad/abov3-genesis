@@ -68,6 +68,45 @@ try:
 except ImportError:
     SECURE_DEBUG_AVAILABLE = False
 
+# Import Auto Context Compact system
+from .auto_context_compact import (
+    AutoContextCompact,
+    CompactionStrategy,
+    ContextImportance,
+    ContextSegment,
+    CompressionMethod,
+    get_context_compact,
+    add_context,
+    compact_context,
+    get_context_summary,
+    get_compaction_stats
+)
+
+from .context_intelligence import (
+    ContextIntelligence,
+    ContextAnalysis,
+    ContextPrediction,
+    ContextPattern,
+    ContextState,
+    IntentType,
+    get_context_intelligence,
+    analyze_context,
+    predict_context_evolution,
+    optimize_context,
+    get_intelligence_report
+)
+
+from .context_compact_integration import (
+    ContextCompactIntegration,
+    IntegrationType,
+    MonitoringLevel,
+    get_context_integration,
+    sync_with_memory,
+    trace_operation,
+    handle_error_with_context,
+    get_integration_report
+)
+
 __all__ = [
     # Original exports
     "Assistant",
@@ -119,7 +158,42 @@ __all__ = [
     'get_debug_report',
     
     # Security flag
-    'SECURE_DEBUG_AVAILABLE'
+    'SECURE_DEBUG_AVAILABLE',
+    
+    # Auto Context Compact system
+    'AutoContextCompact',
+    'CompactionStrategy',
+    'ContextImportance',
+    'ContextSegment',
+    'CompressionMethod',
+    'get_context_compact',
+    'add_context',
+    'compact_context',
+    'get_context_summary',
+    'get_compaction_stats',
+    
+    # Context Intelligence
+    'ContextIntelligence',
+    'ContextAnalysis',
+    'ContextPrediction',
+    'ContextPattern',
+    'ContextState',
+    'IntentType',
+    'get_context_intelligence',
+    'analyze_context',
+    'predict_context_evolution',
+    'optimize_context',
+    'get_intelligence_report',
+    
+    # Context Compact Integration
+    'ContextCompactIntegration',
+    'IntegrationType',
+    'MonitoringLevel',
+    'get_context_integration',
+    'sync_with_memory',
+    'trace_operation',
+    'handle_error_with_context',
+    'get_integration_report'
 ]
 
 # Add secure debugger to exports if available

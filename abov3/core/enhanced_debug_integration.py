@@ -398,8 +398,8 @@ class EnhancedDebugIntegration:
         
         return context
     
-    def handle_error(self, error: Exception, context_id: Optional[str] = None, 
-                    **kwargs) -> Dict[str, Any]:
+    def handle_error_sync(self, error: Exception, context_id: Optional[str] = None, 
+                         **kwargs) -> Dict[str, Any]:
         """
         Main entry point for error handling
         Orchestrates all components for comprehensive error resolution
@@ -903,8 +903,8 @@ class EnhancedDebugIntegration:
     
     async def handle_error(self, error: Exception, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Async wrapper for error handling"""
-        # Convert to sync call for compatibility
-        return self.handle_error(error, context_id=None, **{})
+        # Convert to sync call for compatibility  
+        return self.handle_error_sync(error, context_id=None)
     
     def get_session_summary(self) -> Dict[str, Any]:
         """Get summary of the debug session"""
@@ -1106,7 +1106,7 @@ def get_debug_integration(project_path: Optional[Path] = None,
 def handle_error(error: Exception, **kwargs) -> Dict[str, Any]:
     """Handle error with full integration"""
     integration = get_debug_integration()
-    return integration.handle_error(error, **kwargs)
+    return integration.handle_error_sync(error, **kwargs)
 
 
 def debug_query(query: str) -> str:
