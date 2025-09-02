@@ -188,15 +188,19 @@ class ErrorPattern:
         # Update average execution time
         current_avg = self.success_metrics['average_execution_time']
         total = self.success_metrics['total_applications']
-        self.success_metrics['average_execution_time'] = (
-            (current_avg * (total - 1) + execution_time) / total
-        )
+        if total > 0:
+            self.success_metrics['average_execution_time'] = (
+                (current_avg * (total - 1) + execution_time) / total
+            )
         
         # Calculate success rate
-        self.success_metrics['success_rate'] = (
-            self.success_metrics['successful_applications'] / 
-            self.success_metrics['total_applications']
-        )
+        if self.success_metrics['total_applications'] > 0:
+            self.success_metrics['success_rate'] = (
+                self.success_metrics['successful_applications'] / 
+                self.success_metrics['total_applications']
+            )
+        else:
+            self.success_metrics['success_rate'] = 0.0
 
 
 @dataclass
@@ -672,12 +676,12 @@ class IntelligentFixGenerator:
         
         # Update strategy metrics
         strategy.application_count += 1
-        if success:
+        if success and strategy.application_count > 0:
             strategy.success_rate = (
                 (strategy.success_rate * (strategy.application_count - 1) + 1) / 
                 strategy.application_count
             )
-        else:
+        elif strategy.application_count > 0:
             strategy.success_rate = (
                 (strategy.success_rate * (strategy.application_count - 1)) / 
                 strategy.application_count
@@ -989,9 +993,10 @@ class ErrorResolutionEngine:
                 
                 # Update average resolution time
                 total = self.metrics['resolved_errors'] + self.metrics['failed_resolutions']
-                self.metrics['average_resolution_time'] = (
-                    (self.metrics['average_resolution_time'] * (total - 1) + execution_time) / total
-                )
+                if total > 0:
+                    self.metrics['average_resolution_time'] = (
+                        (self.metrics['average_resolution_time'] * (total - 1) + execution_time) / total
+                    )
                 
                 # Learn from success
                 if self.learning_enabled:
