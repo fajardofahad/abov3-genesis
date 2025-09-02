@@ -1698,6 +1698,49 @@ class EnterpriseDebugEngine:
                 recommendations.append(f"Optimize slow functions: {', '.join(slow_functions[:3])}")
         
         return recommendations
+    
+    def get_system_health(self) -> Dict[str, Any]:
+        """Get system health metrics for monitoring"""
+        health = {
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'metrics': {
+                'active_sessions': len(self.debug_sessions),
+                'current_session': self.current_session_id,
+                'performance_profiles': len(self.performance_profiles),
+                'total_errors_handled': sum(
+                    session.get('error_count', 0) 
+                    for session in self.debug_sessions.values()
+                )
+            },
+            'components': {
+                'error_analyzer': 'operational',
+                'interactive_debugger': 'operational', 
+                'nl_debugger': 'operational'
+            }
+        }
+        
+        # Add system resource info if psutil available
+        if psutil:
+            try:
+                health['system'] = {
+                    'cpu_percent': psutil.cpu_percent(),
+                    'memory_percent': psutil.virtual_memory().percent,
+                    'disk_usage': psutil.disk_usage('/').percent
+                }
+            except Exception:
+                health['system'] = {'status': 'unavailable'}
+        
+        # Check component health
+        try:
+            if not hasattr(self.error_analyzer, 'analyze_exception'):
+                health['status'] = 'degraded'
+                health['components']['error_analyzer'] = 'error'
+        except Exception:
+            health['status'] = 'degraded'
+            health['components']['error_analyzer'] = 'error'
+        
+        return health
 
 
 # Global instance
