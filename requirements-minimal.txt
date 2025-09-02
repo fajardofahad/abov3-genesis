@@ -1,0 +1,17 @@
+# Minimal requirements for testing ABOV3 Genesis
+# Install with: pip install -r requirements-minimal.txt
+
+# Essential dependencies only
+prompt_toolkit>=3.0.36     # Terminal UI
+rich>=13.5.0               # Terminal formatting  
+click>=8.1.0               # CLI framework
+pyyaml>=6.0.0              # Configuration
+aiofiles>=23.0.0           # Async file operations
+aiohttp>=3.8.0             # HTTP client
+psutil>=5.9.0              # System utilities
+
+# Optional - comment out if causing issues
+# ollama>=0.2.0            # Ollama client
+# docker>=6.0.0            # Docker (heavy, might cause hangs)
+# kubernetes>=26.0.0       # Kubernetes (heavy, might cause hangs)  
+# redis>=4.5.0             # Redis (might try to connect)

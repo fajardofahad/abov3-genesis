@@ -11,7 +11,7 @@ import sys
 import os
 import json
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from datetime import datetime
 import click
 from rich.console import Console
@@ -44,6 +44,14 @@ from abov3.ui.display import UIManager
 from abov3.ui.genz import GenZStatus, AnimatedStatus
 from abov3.security.integration import SecurityIntegration, initialize_abov3_security
 from abov3.security.core import SecurityLevel
+from abov3.core.claude_integration import ClaudeIntegration, ClaudeIntegrationConfig, initialize_claude_integration
+from abov3.core.enhanced_debug_integration import (
+    EnhancedDebugIntegration,
+    DebugMode,
+    DebugContext,
+    IntegrationEvent
+)
+from abov3.core.enterprise_debugger import get_debug_engine
 
 console = Console()
 
@@ -79,6 +87,13 @@ class ABOV3Genesis:
         
         # Security integration
         self.security_integration = None
+        
+        # Claude-level integration
+        self.claude_integration = None
+        
+        # Enhanced debug integration
+        self.debug_integration = None
+        self.debug_context = None
         
         # Processing state
         self.processing = False
@@ -560,6 +575,67 @@ class ABOV3Genesis:
         # Show animated thinking status
         await self.animated_status.animate_thinking(2.0, "Initializing Genesis Engine...")
         
+        # Initialize Enhanced Debug Integration first for maximum observability
+        console.print("[dim]🐛 Initializing Enhanced Debug System...[/dim]")
+        try:
+            debug_mode = DebugMode.DEVELOPMENT if os.getenv('DEBUG', '').lower() == 'true' else DebugMode.PRODUCTION
+            self.debug_integration = EnhancedDebugIntegration(
+                project_path=self.project_path,
+                mode=debug_mode
+            )
+            
+            # Create debug context for this session
+            self.debug_context = DebugContext(
+                session_id=datetime.now().strftime('%Y%m%d_%H%M%S'),
+                mode=debug_mode,
+                user_id='genesis_user',
+                project_path=self.project_path,
+                timestamp=datetime.now(),
+                automation_enabled=True,
+                learning_enabled=True
+            )
+            
+            # Register debug context
+            self.debug_integration.register_context(self.debug_context)
+            
+            # Enable automatic error detection and resolution
+            self.debug_integration.enable_automatic_resolution()
+            
+            # Start monitoring
+            self.debug_integration.start_monitoring()
+            
+            console.print("[green]✅ Enhanced Debug System initialized successfully[/green]")
+        except Exception as e:
+            console.print(f"[yellow]⚠️ Debug system initialization failed: {e}[/yellow]")
+            console.print("[yellow]⚠️ Continuing without enhanced debugging (reduced observability)[/yellow]")
+        
+        # Initialize Claude-level integration first
+        console.print("[dim]🎯 Initializing Claude-level integration...[/dim]")
+        try:
+            claude_config = ClaudeIntegrationConfig(
+                enable_keyboard_controls=True,
+                max_memory_mb=500,
+                context_window_size=128000,
+                max_execution_time=30.0,
+                auto_save_interval=30.0,
+                background_processing=True,
+                debug_mode=False
+            )
+            self.claude_integration = await initialize_claude_integration(
+                self.project_path, 
+                claude_config
+            )
+            
+            # Setup integration callbacks
+            self.claude_integration.on_todo_toggle = self._on_todo_toggle
+            self.claude_integration.on_interrupt = self._on_interrupt
+            self.claude_integration.on_feedback_received = self._on_feedback_received
+            
+            console.print("[green]✅ Claude-level integration initialized successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]⚠️ Claude integration failed: {e}[/red]")
+            console.print("[yellow]⚠️ Continuing without Claude integration (features limited)[/yellow]")
+        
         # Ensure .abov3 directory exists
         abov3_dir = self.project_path / '.abov3'
         abov3_dir.mkdir(exist_ok=True)
@@ -612,6 +688,10 @@ class ABOV3Genesis:
         # Set the saved AI model as default
         if self.assistant:
             self.assistant.default_model = self.current_model
+            
+            # Integrate Claude-level capabilities with assistant
+            if self.claude_integration:
+                self.assistant.claude_integration = self.claude_integration
         
         # Enable automatic agent switching
         if self.assistant and self.agent_manager:
@@ -1044,6 +1124,8 @@ class ABOV3Genesis:
                 console.print("[yellow]Task manager not available[/yellow]")
         elif cmd.startswith('/security'):
             await self.handle_security_command(cmd_parts[1:] if len(cmd_parts) > 1 else [])
+        elif cmd.startswith('/claude'):
+            await self.handle_claude_command(cmd_parts[1:] if len(cmd_parts) > 1 else [])
         else:
             console.print(f"[red]Unknown command: {command}[/red]")
             console.print("[dim]Type '/help' for available commands[/dim]")
@@ -1284,10 +1366,17 @@ class ABOV3Genesis:
         console.print(help_text)
     
     async def process_input(self, user_input: str):
-        """Process user input with Genesis capabilities"""
+        """Process user input with Claude-level capabilities"""
         if not self.assistant:
             console.print("[red]Assistant not available. Please check initialization.[/red]")
             return
+        
+        # Debug hook: Track input processing
+        if self.debug_integration:
+            await self.debug_integration.track_operation(
+                'process_input',
+                {'input': user_input, 'timestamp': datetime.now()}
+            )
         
         # Security validation if available
         # Only apply security to potentially dangerous inputs
@@ -1316,11 +1405,128 @@ class ABOV3Genesis:
         self.current_task = "Processing your request"
         
         try:
-            # Start background animation that runs continuously
-            animation_task = asyncio.create_task(
-                self.animated_status.start_background_animation("thinking")
+            # Use Claude integration context if available
+            if self.claude_integration:
+                async with self.claude_integration.operation_context("Processing user input"):
+                    await self._process_with_claude_integration(user_input)
+            else:
+                await self._process_without_integration(user_input)
+                
+        except Exception as e:
+            # Enhanced error handling with debug integration
+            if self.debug_integration:
+                # Let debug system analyze and potentially fix the error
+                resolution = await self.debug_integration.handle_error(
+                    e,
+                    context={'user_input': user_input, 'operation': 'process_input'}
+                )
+                
+                if resolution and resolution.get('fixed'):
+                    console.print(f"[green]🔧 Error automatically resolved: {resolution.get('fix_description')}[/green]")
+                    # Retry the operation if fix was applied
+                    if resolution.get('retry_safe'):
+                        try:
+                            response = await self.assistant.process(user_input, context)
+                            console.print(f"\n[bold green]Genesis Response:[/bold green]")
+                            console.print(response)
+                            return
+                        except Exception as retry_e:
+                            console.print(f"[red]Retry failed: {retry_e}[/red]")
+                else:
+                    console.print(f"[red]Error: {e}[/red]")
+                    if resolution and resolution.get('suggestions'):
+                        console.print("[yellow]💡 Suggestions:[/yellow]")
+                        for suggestion in resolution['suggestions']:
+                            console.print(f"  • {suggestion}")
+            else:
+                console.print(f"[red]Error processing request: {e}[/red]")
+        finally:
+            self.processing = False
+            self.current_task = None
+    
+    async def _process_with_claude_integration(self, user_input: str):
+        """Process input with full Claude-level integration"""
+        # Store conversation context in memory
+        await self.claude_integration.store_conversation_context(
+            user_input,
+            "Processing...",  # Will be updated with actual response
+            {
+                'project_path': str(self.project_path),
+                'current_agent': self.agent_manager.current_agent.name if self.agent_manager and self.agent_manager.current_agent else None,
+                'genesis_phase': await self.genesis_engine.get_current_phase() if self.genesis_engine else None
+            }
+        )
+        
+        # Get relevant context from memory
+        relevant_context = await self.claude_integration.retrieve_relevant_context(user_input, limit=5)
+        
+        # Start background animation
+        animation_task = asyncio.create_task(
+            self.animated_status.start_background_animation("thinking")
+        )
+        
+        try:
+            # Enhanced context with memory and history
+            context = {
+                'project_path': str(self.project_path),
+                'agent': self.agent_manager.current_agent if self.agent_manager else None,
+                'genesis': await self.genesis_engine.get_genesis_stats() if self.genesis_engine else None,
+                'genesis_engine': self.genesis_engine,
+                'agent_manager': self.agent_manager,
+                'relevant_context': relevant_context,
+                'claude_integration': self.claude_integration
+            }
+            
+            # Check for keyboard interrupt
+            if self.claude_integration.keyboard_handler and self.claude_integration.keyboard_handler.is_interrupt_requested():
+                self.animated_status.stop_background_animation("Interrupted by user")
+                animation_task.cancel()
+                console.print("\n⚠️  Operation interrupted by user (ESC)")
+                return
+            
+            # Process with assistant (with debug monitoring)
+            if self.debug_integration:
+                with self.debug_integration.monitored_operation('assistant_processing'):
+                    response = await self.assistant.process(user_input, context)
+                    # Analyze response for potential issues
+                    await self.debug_integration.analyze_response(response)
+            else:
+                response = await self.assistant.process(user_input, context)
+            
+            # Stop animation
+            self.animated_status.stop_background_animation("Processing complete!")
+            animation_task.cancel()
+            
+            # Display response
+            console.print(f"\n[bold green]Genesis Response:[/bold green]")
+            console.print(response)
+            
+            # Update conversation context with actual response
+            await self.claude_integration.store_conversation_context(
+                user_input,
+                response,
+                {
+                    'project_path': str(self.project_path),
+                    'current_agent': self.agent_manager.current_agent.name if self.agent_manager and self.agent_manager.current_agent else None,
+                    'genesis_phase': await self.genesis_engine.get_current_phase() if self.genesis_engine else None,
+                    'response_length': len(response)
+                }
             )
             
+        except Exception as e:
+            # Stop animation on error
+            self.animated_status.stop_background_animation("Error occurred")
+            animation_task.cancel()
+            raise e
+    
+    async def _process_without_integration(self, user_input: str):
+        """Process input without Claude integration (fallback)"""
+        # Start background animation that runs continuously
+        animation_task = asyncio.create_task(
+            self.animated_status.start_background_animation("thinking")
+        )
+            
+        try:
             # Prepare context for Assistant processing
             context = {
                 'project_path': str(self.project_path),
@@ -1359,10 +1565,7 @@ class ABOV3Genesis:
                 except asyncio.CancelledError:
                     pass
             
-            console.print(f"[red]Error processing request: {e}[/red]")
-        finally:
-            self.processing = False
-            self.current_task = None
+            raise e
     
     async def queue_input(self, user_input: str):
         """Queue input for processing"""
@@ -1469,6 +1672,12 @@ class ABOV3Genesis:
         console.print(format_line("/security scan   - Run vulnerability scan"))
         console.print(format_line("/security report - Generate security report"))
         console.print(format_line(""))
+        console.print(format_line("Claude Integration:"))
+        console.print(format_line("/claude          - Integration status"))
+        console.print(format_line("/claude memory   - Memory statistics"))
+        console.print(format_line("/claude feedback - Feedback loop stats"))
+        console.print(format_line("/claude execute  - Execute with feedback"))
+        console.print(format_line(""))
         console.print(format_line("Other Commands:"))
         console.print(format_line("/tasks           - View task progress"))
         console.print(format_line("/genesis         - Show Genesis status"))
@@ -1486,6 +1695,30 @@ class ABOV3Genesis:
         """Cleanup with Genesis theme"""
         await self.animated_status.animate_status("working", duration=1.0, message="Preserving your genesis...")
         console.print()
+        
+        # Cleanup debug integration
+        if self.debug_integration:
+            try:
+                # Get debug session summary
+                summary = self.debug_integration.get_session_summary()
+                if summary:
+                    console.print("\n[cyan]🐛 Debug Session Summary:[/cyan]")
+                    console.print(f"  Errors handled: {summary.get('errors_handled', 0)}")
+                    console.print(f"  Auto-resolutions: {summary.get('auto_resolutions', 0)}")
+                    console.print(f"  Issues created: {summary.get('issues_created', 0)}")
+                    console.print(f"  Patterns learned: {summary.get('patterns_learned', 0)}")
+                
+                # Shutdown debug system
+                await self.debug_integration.shutdown()
+            except Exception as e:
+                console.print(f"[yellow]Warning: Debug system cleanup error: {e}[/yellow]")
+        
+        # Cleanup Claude integration first
+        if self.claude_integration:
+            try:
+                await self.claude_integration.shutdown()
+            except Exception as e:
+                console.print(f"[yellow]Warning: Claude integration cleanup error: {e}[/yellow]")
         
         # Cancel background tasks
         for task in self.background_tasks:
@@ -1514,6 +1747,124 @@ class ABOV3Genesis:
         
         await self.animated_status.animate_success(duration=2.0, message="✨ Your genesis continues... See you next time! ✨")
         console.print(f"[dim italic]{self.tagline}[/dim italic]")
+    
+    async def _on_todo_toggle(self, visible: bool):
+        """Handle todo list visibility toggle"""
+        status = "visible" if visible else "hidden"
+        console.print(f"\n📋 Todo list is now {status}")
+        
+        # Here you would integrate with your todo system
+        # For now, just acknowledge the toggle
+    
+    async def _on_interrupt(self):
+        """Handle keyboard interrupt"""
+        console.print("\n🚨 Operation interrupted by user!")
+        
+        # Set processing flags
+        self.interrupt_requested = True
+        self.processing = False
+        
+        # Stop any running animations
+        self.animated_status.stop_animation()
+    
+    async def _on_feedback_received(self, feedback_type: str, data: Any):
+        """Handle feedback from the feedback loop system"""
+        if feedback_type == 'execution_complete':
+            duration = data.duration_seconds
+            result = data.result.value
+            console.print(f"\n⚡ Execution completed in {duration:.2f}s - {result}")
+        
+        elif feedback_type == 'analysis':
+            high_severity_count = sum(1 for analysis in data if analysis.severity >= 7)
+            if high_severity_count > 0:
+                console.print(f"\n🔍 Found {high_severity_count} critical issues that need attention")
+            else:
+                console.print(f"\n✅ Code analysis completed - {len(data)} suggestions available")
+    
+    async def handle_claude_command(self, args: List[str]):
+        """Handle Claude integration commands"""
+        if not self.claude_integration:
+            console.print("[red]Claude integration not available[/red]")
+            return
+        
+        if not args:
+            # Show Claude integration status
+            status = self.claude_integration.get_system_status()
+            console.print(f"\n[cyan]🎯 Claude Integration Status:[/cyan]")
+            console.print(f"Initialized: {'✅' if status['initialized'] else '❌'}")
+            console.print(f"Running: {'✅' if status['running'] else '❌'}")
+            console.print(f"Active Operation: {status['active_operation'] or 'None'}")
+            
+            modules = status['modules']
+            console.print(f"\n[cyan]Modules:[/cyan]")
+            console.print(f"  Keyboard: {'✅' if modules['keyboard'] else '❌'}")
+            console.print(f"  Memory: {'✅' if modules['memory'] else '❌'}")
+            console.print(f"  Feedback: {'✅' if modules['feedback'] else '❌'}")
+            
+            perf = status['performance']
+            console.print(f"\n[cyan]Performance:[/cyan]")
+            console.print(f"  Operations: {perf['operations_completed']}")
+            console.print(f"  Memory Ops: {perf['memory_operations']}")
+            console.print(f"  Feedback Cycles: {perf['feedback_cycles']}")
+            console.print(f"  Avg Response: {perf['average_response_time']:.3f}s")
+            
+        elif args[0] == 'memory':
+            if len(args) > 1 and args[1] == 'stats':
+                if self.claude_integration.memory_manager:
+                    stats = self.claude_integration.memory_manager.get_memory_stats()
+                    console.print(f"\n[cyan]🧠 Memory Statistics:[/cyan]")
+                    console.print(f"Total Entries: {stats['total_entries']}")
+                    console.print(f"Memory Usage: {stats['memory_usage_mb']:.1f} MB / {stats['memory_limit_mb']} MB")
+                    console.print(f"Usage: {stats['memory_usage_percent']:.1f}%")
+                    console.print(f"Session Duration: {stats['session_duration_hours']:.1f} hours")
+                    
+                    console.print(f"\n[cyan]Entries by Type:[/cyan]")
+                    for type_name, count in stats['entries_by_type'].items():
+                        console.print(f"  {type_name}: {count}")
+                else:
+                    console.print("[red]Memory manager not available[/red]")
+            else:
+                console.print("[red]Use: /claude memory stats[/red]")
+        
+        elif args[0] == 'feedback':
+            if len(args) > 1 and args[1] == 'stats':
+                if self.claude_integration.feedback_loop:
+                    stats = self.claude_integration.feedback_loop.get_cycle_metrics()
+                    console.print(f"\n[cyan]🔄 Feedback Loop Statistics:[/cyan]")
+                    console.print(f"Total Executions: {stats['total_executions']}")
+                    console.print(f"Successful Fixes: {stats['successful_fixes']}")
+                    console.print(f"Avg Iterations: {stats['average_iterations_to_success']:.1f}")
+                    
+                    if stats['common_errors']:
+                        console.print(f"\n[cyan]Common Errors:[/cyan]")
+                        for error, count in list(stats['common_errors'].items())[:5]:
+                            console.print(f"  {error}: {count}")
+                else:
+                    console.print("[red]Feedback loop not available[/red]")
+            else:
+                console.print("[red]Use: /claude feedback stats[/red]")
+        
+        elif args[0] == 'execute':
+            if len(args) > 1:
+                file_path = Path(args[1])
+                if file_path.exists():
+                    console.print(f"[cyan]🚀 Executing {file_path.name} with feedback loop...[/cyan]")
+                    result = await self.claude_integration.execute_with_feedback(file_path)
+                    
+                    if result['success']:
+                        console.print(f"[green]✅ Execution successful in {result['iterations']} iterations![/green]")
+                    else:
+                        console.print(f"[red]❌ Execution failed after {result['iterations']} iterations[/red]")
+                        if result.get('error_log'):
+                            console.print(f"[dim]Errors: {result['error_log'][0]}[/dim]")
+                else:
+                    console.print(f"[red]File not found: {file_path}[/red]")
+            else:
+                console.print("[red]Usage: /claude execute <file_path>[/red]")
+        
+        else:
+            console.print(f"[red]Unknown Claude command: {args[0]}[/red]")
+            console.print("[dim]Available: status, memory stats, feedback stats, execute <file>[/dim]")
 
 
 @click.command()
