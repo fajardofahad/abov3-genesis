@@ -904,7 +904,7 @@ class EnhancedDebugIntegration:
     async def handle_error(self, error: Exception, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Async wrapper for error handling"""
         # Convert to sync call for compatibility
-        return self.handle_error(error, context_id=None, **(context or {}))
+        return self.handle_error(error, context_id=None, **{})
     
     def get_session_summary(self) -> Dict[str, Any]:
         """Get summary of the debug session"""

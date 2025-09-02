@@ -1741,6 +1741,27 @@ class EnterpriseDebugEngine:
             health['components']['error_analyzer'] = 'error'
         
         return health
+    
+    def track_operation(self, operation_name: str, data: Dict[str, Any] = None) -> None:
+        """Track an operation for debugging purposes"""
+        if not self.current_session_id:
+            self.create_debug_session()
+        
+        timestamp = datetime.now()
+        operation_data = {
+            'operation': operation_name,
+            'timestamp': timestamp,
+            'data': data or {}
+        }
+        
+        # Add to current session's execution trace
+        if self.current_session_id in self.debug_sessions:
+            self.debug_sessions[self.current_session_id]['execution_trace'].append(operation_data)
+            
+            # Keep only last 100 operations to prevent memory bloat
+            trace = self.debug_sessions[self.current_session_id]['execution_trace']
+            if len(trace) > 100:
+                self.debug_sessions[self.current_session_id]['execution_trace'] = trace[-100:]
 
 
 # Global instance
