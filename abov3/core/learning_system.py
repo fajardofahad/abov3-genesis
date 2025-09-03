@@ -162,7 +162,7 @@ class ModelPerformance:
         else:
             # For other types, check quality metrics
             if feedback.quality_metrics:
-                avg_quality = sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics)
+                avg_quality = sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics) if feedback.quality_metrics else 0
                 return avg_quality >= 0.6
             return True  # Default to positive if unclear
 
@@ -408,7 +408,7 @@ class AdvancedPatternLearner:
     def _get_overall_quality(self, feedback: FeedbackEntry) -> float:
         """Calculate overall quality score from feedback"""
         if feedback.quality_metrics:
-            return sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics)
+            return sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics) if feedback.quality_metrics else 0
         elif feedback.feedback_type == FeedbackType.RATING:
             return float(feedback.feedback_value) / 5.0 if isinstance(feedback.feedback_value, (int, float)) else 0.5
         else:
@@ -456,7 +456,7 @@ class AdvancedPatternLearner:
             # User-specific adaptation
             if pattern_key in self.user_specific_patterns and user_type in self.user_specific_patterns[pattern_key]:
                 user_patterns = self.user_specific_patterns[pattern_key][user_type]
-                user_success_rate = sum(1 for p in user_patterns if p['quality'] > 0.6) / len(user_patterns)
+                user_success_rate = sum(1 for p in user_patterns if p['quality'] > 0.6) / len(user_patterns) if user_patterns else 0
                 enhanced_score *= (1 + user_success_rate * 0.3)
                 metadata['user_success_rate'] = user_success_rate
             
@@ -464,7 +464,7 @@ class AdvancedPatternLearner:
             if model_name and pattern_key in self.model_specific_patterns:
                 if model_name in self.model_specific_patterns[pattern_key]:
                     model_patterns = self.model_specific_patterns[pattern_key][model_name]
-                    model_success_rate = sum(1 for p in model_patterns if p['quality'] > 0.6) / len(model_patterns)
+                    model_success_rate = sum(1 for p in model_patterns if p['quality'] > 0.6) / len(model_patterns) if model_patterns else 0
                     enhanced_score *= (1 + model_success_rate * 0.2)
                     metadata['model_success_rate'] = model_success_rate
             
@@ -487,7 +487,7 @@ class AdvancedPatternLearner:
             total_count = successful_count + failed_count
             
             if total_count > 0:
-                success_rate = successful_count / total_count
+                success_rate = successful_count / total_count if total_count > 0 else 0
                 enhanced_score *= success_rate
                 metadata['success_rate'] = success_rate
                 metadata['usage_count'] = total_count
@@ -693,15 +693,15 @@ class AdaptiveLearningSystem:
         
         # Low success rate
         if model_perf.total_requests >= 10:
-            success_rate = model_perf.successful_requests / model_perf.total_requests
+            success_rate = model_perf.successful_requests / model_perf.total_requests if model_perf.total_requests > 0 else 0
             if success_rate < 0.6:
                 should_adapt = True
                 adaptation_reason = f"Low success rate: {success_rate:.2f}"
         
         # Declining performance trend
         if len(model_perf.improvement_trend) >= 10:
-            recent_avg = sum(model_perf.improvement_trend[-5:]) / 5
-            older_avg = sum(model_perf.improvement_trend[-10:-5]) / 5
+            recent_avg = sum(model_perf.improvement_trend[-5:]) / min(5, len(model_perf.improvement_trend[-5:])) if model_perf.improvement_trend[-5:] else 0
+            older_avg = sum(model_perf.improvement_trend[-10:-5]) / len(model_perf.improvement_trend[-10:-5]) if model_perf.improvement_trend[-10:-5] else 0
             if recent_avg < older_avg - 0.2:
                 should_adapt = True
                 adaptation_reason = f"Declining performance: {recent_avg:.2f} vs {older_avg:.2f}"
@@ -864,7 +864,7 @@ class ActiveLearningSystem:
         
         for area, uncertainties in self.uncertainty_tracker.items():
             if len(uncertainties) > 5:  # Sufficient data
-                avg_uncertainty = sum(uncertainties[-10:]) / min(10, len(uncertainties))
+                avg_uncertainty = sum(uncertainties[-10:]) / min(10, len(uncertainties)) if uncertainties else 0
                 if avg_uncertainty > 0.7:  # High uncertainty threshold
                     uncertain_areas.append({
                         'area': area,
@@ -906,7 +906,7 @@ class FeedbackSynthesizer:
         for metric, scores in quality_scores.items():
             if len(scores) > 1:
                 synthesis['quality_trends'][metric] = {
-                    'average': sum(scores) / len(scores),
+                    'average': sum(scores) / len(scores) if scores else 0,
                     'trend': self._calculate_trend(scores),
                     'variance': np.var(scores) if len(scores) > 1 else 0
                 }
@@ -950,7 +950,7 @@ class PerformancePredictor:
         # Adjust based on model capability
         model_performance = context.get('model_performance', {})
         if model_performance:
-            avg_performance = sum(model_performance.values()) / len(model_performance)
+            avg_performance = sum(model_performance.values()) / len(model_performance) if model_performance else 0
             base_quality = base_quality * 0.7 + avg_performance * 0.3
         
         confidence = min(0.9, base_quality)
@@ -1110,7 +1110,7 @@ class ConflictResolver:
             return isinstance(feedback.feedback_value, (int, float)) and feedback.feedback_value >= 3.0
         else:
             if feedback.quality_metrics:
-                avg_quality = sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics)
+                avg_quality = sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics) if feedback.quality_metrics else 0
                 return avg_quality >= 0.6
             return True  # Default to positive if unclear
     
@@ -1222,11 +1222,11 @@ class ConflictResolver:
             quality_by_time = defaultdict(list)
             for feedback in recent_feedback:
                 day = datetime.fromtimestamp(feedback.timestamp).strftime('%Y-%m-%d')
-                overall_quality = sum(feedback.quality_metrics.values()) / max(1, len(feedback.quality_metrics))
+                overall_quality = sum(feedback.quality_metrics.values()) / len(feedback.quality_metrics) if feedback.quality_metrics else 0
                 quality_by_time[day].append(overall_quality)
             
             for day, qualities in quality_by_time.items():
-                report['quality_trends'][day] = sum(qualities) / len(qualities)
+                report['quality_trends'][day] = sum(qualities) / len(qualities) if qualities else 0
         
         return report
     

@@ -276,7 +276,7 @@ class DebugIntegration:
         
         # Calculate overlap
         overlap = len(prompt_words & response_words)
-        relevance = overlap / len(prompt_words)
+        relevance = overlap / len(prompt_words) if prompt_words else 0
         
         return min(relevance * 2, 1.0)  # Scale up and cap at 1.0
     

@@ -701,7 +701,7 @@ class FeedbackLoop:
             total_cycles = self.metrics['successful_fixes'] + 1
             self.metrics['average_iterations_to_success'] = (
                 (self.metrics['average_iterations_to_success'] * (total_cycles - 1) + 
-                 self.current_iteration) / total_cycles
+                 self.current_iteration) / total_cycles if total_cycles > 0 else 0
             )
             
             # Store cycle results in memory
@@ -798,10 +798,13 @@ class FeedbackLoop:
         # Analyze common errors
         if self.metrics['common_errors']:
             total_errors = sum(self.metrics['common_errors'].values())
-            insights['most_common_errors'] = {
-                error: (count / total_errors) * 100
-                for error, count in self.metrics['common_errors'].items()
-            }
+            if total_errors > 0:
+                insights['most_common_errors'] = {
+                    error: (count / total_errors) * 100
+                    for error, count in self.metrics['common_errors'].items()
+                }
+            else:
+                insights['most_common_errors'] = {}
         
         # Calculate success rate
         if self.metrics['total_executions'] > 0:
