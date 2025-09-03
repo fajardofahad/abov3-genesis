@@ -488,7 +488,7 @@ class KeyboardHandler:
         
         avg_response = 0.0
         if self.metrics['response_times']:
-            avg_response = sum(self.metrics['response_times']) / len(self.metrics['response_times'])
+            avg_response = sum(self.metrics['response_times']) / len(self.metrics['response_times']) if self.metrics['response_times'] else 0
         
         metrics = {
             'keys_processed': self.metrics['keys_processed'],

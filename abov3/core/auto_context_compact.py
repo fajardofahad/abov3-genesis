@@ -783,7 +783,7 @@ class AutoContextCompact:
             total_relationships = len(related_segments)
             
             if total_relationships > 0:
-                relationship_ratio = preserved_relationships / total_relationships
+                relationship_ratio = preserved_relationships / total_relationships if total_relationships > 0 else 0
                 # If more than 50% of relationships are preserved, preserve this too
                 if relationship_ratio > 0.5:
                     preserve_list.append(segment_id)

@@ -415,7 +415,7 @@ class GenesisEngine:
         total_phases = 5  # idea, design, build, test, deploy
         
         # Calculate progress percentage
-        progress = (completed_phases / total_phases) * 100
+        progress = (completed_phases / max(1, total_phases)) * 100
         
         stats = {
             'project_name': data.get('name', 'Unknown'),

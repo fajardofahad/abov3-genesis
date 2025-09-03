@@ -706,9 +706,10 @@ class AutoScaler:
         if not recent_metrics:
             return
         
-        avg_cpu = sum(m['cpu_utilization'] for m in recent_metrics) / len(recent_metrics)
-        avg_memory = sum(m['memory_utilization'] for m in recent_metrics) / len(recent_metrics)
-        avg_response_time = sum(m['avg_response_time'] for m in recent_metrics) / len(recent_metrics)
+        metrics_count = max(1, len(recent_metrics))
+        avg_cpu = sum(m['cpu_utilization'] for m in recent_metrics) / metrics_count
+        avg_memory = sum(m['memory_utilization'] for m in recent_metrics) / metrics_count
+        avg_response_time = sum(m['avg_response_time'] for m in recent_metrics) / metrics_count
         
         # Scale up conditions
         should_scale_up = (

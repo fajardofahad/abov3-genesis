@@ -98,7 +98,7 @@ class GenesisWorkflow:
         return {
             'completed_phases': completed_count,
             'total_phases': total_count,
-            'progress_percentage': (completed_count / total_count) * 100,
+            'progress_percentage': (completed_count / max(1, total_count)) * 100,
             'current_phase': self.get_current_phase().name,
             'phases': [
                 {

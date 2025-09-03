@@ -770,7 +770,7 @@ class PromptInjectionGuard:
         
         recent_history = self.context_history[-20:]  # Last 20 prompts
         total_prompts = len(recent_history)
-        average_risk = sum(entry['risk_score'] for entry in recent_history) / total_prompts
+        average_risk = sum(entry['risk_score'] for entry in recent_history) / max(1, total_prompts)
         injection_attempts = sum(1 for entry in recent_history if entry['is_injection'])
         
         return {

@@ -227,7 +227,7 @@ class GenesisFlow:
         """Get Genesis progress information"""
         completed_phases = sum(1 for phase in self.phases if phase.status == PhaseStatus.COMPLETE)
         total_phases = len(self.phases)
-        progress_percentage = (completed_phases / total_phases) * 100
+        progress_percentage = (completed_phases / total_phases) * 100 if total_phases > 0 else 0
         
         current_phase = self.get_current_phase()
         
