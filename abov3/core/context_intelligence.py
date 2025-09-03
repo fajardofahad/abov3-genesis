@@ -269,7 +269,7 @@ class ClaudeStylePatternDetector(PatternDetector):
             time_gaps.append(gap)
         
         if time_gaps:
-            avg_gap = sum(time_gaps) / len(time_gaps)
+            avg_gap = sum(time_gaps) / len(time_gaps) if time_gaps else 0
             
             # Sequential pattern: consistent short gaps
             if avg_gap < 300 and all(gap < 600 for gap in time_gaps):  # < 5 min avg, all < 10 min
@@ -987,16 +987,16 @@ class ContextIntelligence:
         
         # Count segments with relationships
         connected_segments = sum(1 for s in segments if s.relationships)
-        connection_ratio = connected_segments / len(segments)
+        connection_ratio = connected_segments / len(segments) if segments else 0
         
         # Analyze content type consistency
         content_types = [s.content_type for s in segments]
-        type_diversity = len(set(content_types)) / len(segments)
+        type_diversity = len(set(content_types)) / len(segments) if segments else 0
         
         # Lower diversity in recent segments suggests better coherence
         recent_segments = sorted(segments, key=lambda s: s.timestamp)[-5:]
         recent_types = set(s.content_type for s in recent_segments)
-        recent_coherence = 1.0 - (len(recent_types) / len(recent_segments))
+        recent_coherence = 1.0 - (len(recent_types) / len(recent_segments)) if recent_segments else 1.0
         
         # Weighted coherence score
         coherence = (
@@ -1029,17 +1029,17 @@ class ContextIntelligence:
             if any(keyword in content for keyword in pattern_keywords):
                 aligned_segments += 1
         
-        pattern_alignment = aligned_segments / len(segments)
+        pattern_alignment = aligned_segments / len(segments) if segments else 0
         
         # Importance-based relevance
         high_importance_ratio = sum(
             1 for s in segments if s.importance.value >= ContextImportance.MEDIUM.value
-        ) / len(segments)
+        ) / len(segments) if segments else 0
         
         # Recent access relevance
         recent_access_ratio = sum(
             1 for s in segments if s.access_count > 0
-        ) / len(segments)
+        ) / len(segments) if segments else 0
         
         relevance = (
             pattern_alignment * 0.4 +
@@ -1067,10 +1067,10 @@ class ContextIntelligence:
         
         # Efficiency factors
         type_diversity = min(unique_content_types / 5.0, 1.0)  # Cap at 5 types
-        importance_density = high_importance_tokens / total_tokens
+        importance_density = high_importance_tokens / total_tokens if total_tokens > 0 else 0
         
         # Compression potential (inverse of efficiency)
-        avg_tokens_per_segment = total_tokens / len(segments)
+        avg_tokens_per_segment = total_tokens / len(segments) if segments else 0
         size_efficiency = min(avg_tokens_per_segment / 500.0, 1.0)  # Cap at 500 tokens
         
         efficiency = (

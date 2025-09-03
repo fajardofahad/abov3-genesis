@@ -113,7 +113,7 @@ class PerformanceProfile:
         self.total_time += execution_time
         self.min_time = min(self.min_time, execution_time)
         self.max_time = max(self.max_time, execution_time)
-        self.avg_time = self.total_time / self.call_count
+        self.avg_time = self.total_time / self.call_count if self.call_count > 0 else 0
         
         if memory_delta > 0:
             self.memory_allocated += memory_delta
@@ -517,7 +517,7 @@ class IntelligentErrorAnalyzer:
         if not union:
             return 0.0
         
-        return len(intersection) / len(union)
+        return len(intersection) / len(union) if len(union) > 0 else 0
     
     def _generate_prevention_suggestions(self, exception: Exception) -> List[str]:
         """Generate suggestions to prevent future occurrences"""
@@ -881,7 +881,7 @@ class NaturalLanguageDebugger:
             slow_functions = []
             for func_name, times in profile.get('execution_times', {}).items():
                 if times:
-                    avg_time = sum(times) / len(times)
+                    avg_time = sum(times) / len(times) if times else 0
                     if avg_time > 0.1:  # Functions taking >100ms
                         slow_functions.append((func_name, avg_time))
             

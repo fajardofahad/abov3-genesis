@@ -301,12 +301,12 @@ class EnhancedMLDebugger:
         # Fix suggestions confidence
         fix_suggestions = analysis_result.get('fix_suggestions', [])
         if fix_suggestions and len(fix_suggestions) > 0:
-            avg_fix_confidence = sum(fix.get('confidence', 0) for fix in fix_suggestions) / len(fix_suggestions)
+            avg_fix_confidence = sum(fix.get('confidence', 0) for fix in fix_suggestions) / len(fix_suggestions) if fix_suggestions else 0
             confidence_factors.append(avg_fix_confidence)
         
         # Calculate weighted average
         if confidence_factors and len(confidence_factors) > 0:
-            return sum(confidence_factors) / len(confidence_factors)
+            return sum(confidence_factors) / len(confidence_factors) if confidence_factors else 0
         else:
             return 0.3  # Low confidence without ML data
     

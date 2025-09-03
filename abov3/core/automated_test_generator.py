@@ -1005,7 +1005,7 @@ Source: {original_file_path}
         tested_funcs = coverage_report['tested_functions']
         
         if total_funcs > 0:
-            coverage_report['coverage_percentage'] = (tested_funcs / total_funcs) * 100
+            coverage_report['coverage_percentage'] = (tested_funcs / total_funcs) * 100 if total_funcs > 0 else 0
         
         # Count coverage areas
         for test_case in test_cases:
@@ -1047,7 +1047,7 @@ Source: {original_file_path}
             for area in test_case.coverage_areas:
                 stats['coverage_area_distribution'][area] += 1
         
-        stats['average_confidence'] = total_confidence / len(test_cases)
+        stats['average_confidence'] = total_confidence / len(test_cases) if test_cases else 0
         
         return dict(stats)
     

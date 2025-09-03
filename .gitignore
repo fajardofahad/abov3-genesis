@@ -1,6 +1,9 @@
 # Claude Code configuration
 .claude/
 
+# ABOV3 configuration directory
+.abov3/
+
 # Python
 __pycache__/
 *.py[cod]

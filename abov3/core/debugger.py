@@ -163,7 +163,7 @@ class PerformanceProfiler:
         
         avg_execution_times = {}
         for func, times in self.metrics['execution_times'].items():
-            if times:
+            if times and len(times) > 0:
                 avg_execution_times[func] = sum(times) / len(times)
         
         return {
@@ -189,7 +189,7 @@ class PerformanceProfiler:
         # Functions with long execution times
         for func, times in self.metrics['execution_times'].items():
             if times:
-                avg_time = sum(times) / len(times)
+                avg_time = sum(times) / len(times) if len(times) > 0 else 0
                 if avg_time > 0.1:  # More than 100ms average
                     hotspots.append({
                         'type': 'slow_execution',
@@ -200,7 +200,7 @@ class PerformanceProfiler:
         # Functions with high memory usage
         for func, usages in self.metrics['memory_usage'].items():
             if usages:
-                avg_usage = sum(usages) / len(usages)
+                avg_usage = sum(usages) / len(usages) if len(usages) > 0 else 0
                 if avg_usage > 10:  # More than 10MB average
                     hotspots.append({
                         'type': 'high_memory',
