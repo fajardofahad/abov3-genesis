@@ -376,7 +376,14 @@ RESPONSE GUIDELINES:
                         return f"AI Error: {chunk['error']}"
                     
                     if "message" in chunk:
-                        response_parts.append(chunk["message"].get("content", ""))
+                        message = chunk["message"]
+                        content = message.get("content", "")
+                        
+                        # Some models return empty content with thinking field
+                        if not content and "thinking" in message:
+                            content = message["thinking"]
+                            
+                        response_parts.append(content)
                     elif "response" in chunk:
                         response_parts.append(chunk["response"])
                     
